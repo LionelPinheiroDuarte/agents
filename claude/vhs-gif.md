@@ -54,6 +54,19 @@ Show
 - Tape files: `~/documents/video/vhs/*.tape`
 - Output gifs: `~/documents/video/vhs/*.gif`
 - Gifs embedded in a repo README: copy to `<repo>/assets/<name>.gif`
+- Gifs embedded in the portfolio: copy to `~/repos/github/portfolio/src/images/<name>.gif`
+
+## Embedding gifs
+
+**In a README** — standard Markdown:
+```md
+![demo](assets/demo.gif)
+```
+
+**In the portfolio** — use an `<img>` tag with `width: 100%` to fill the main column without breaking the layout:
+```html
+<img src="/images/demo.gif" alt="demo" style="width: 100%;" />
+```
 
 ## Workflow
 
@@ -61,4 +74,4 @@ Show
 2. Write the tape file with the correct settings and patterns
 3. Ask the user to run: `! cd ~/documents/video/vhs && vhs <name>.tape`
 4. Iterate based on feedback (timing, visibility, content)
-5. Once validated, copy the gif to `<repo>/assets/` if it's for a README integration
+5. Once validated, copy the gif to the appropriate destination (README assets or portfolio images)
