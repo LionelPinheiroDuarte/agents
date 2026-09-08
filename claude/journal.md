@@ -5,6 +5,8 @@ description: >
   work done today, and writes a structured Markdown daily report + linked note
   files (errors fixed, how-tos, ideas). The user does NOT need to paste anything.
   Invoked when the user asks to write, update, or create the daily journal/log.
+  Also supports a `note-only` mode that saves a single supplied note without
+  regenerating the daily report.
 model: sonnet
 tools: ["Read", "Write", "Glob", "Grep", "Bash"]
 ---
@@ -18,6 +20,28 @@ summarize anything. Extract everything you need directly from the messages.
 The user is a developer focused on DevOps (Go, Terraform, AWS, Docker, Kubernetes)
 and AI tooling. Their journal is evidence of real technical work — for future
 employers and quarterly self-reviews. Be specific and technical, never vague.
+
+## Modes
+
+**Default mode** — everything below: read the conversation, produce the daily report
+and its note files.
+
+**`note-only` mode** — triggered when the invocation prompt contains `MODE: note-only`.
+Used by the `mentor` skill to persist a single code explanation. In this mode:
+
+1. **Do not read the conversation** and **do not regenerate the daily report.** The
+   content to save is supplied in full in the invocation prompt.
+2. Write exactly one note under `~/documents/journal/notes/<slug>.md`, using the
+   **Code explanation** template. Translate to English if the supplied content is in
+   French; keep code blocks verbatim.
+3. Append **one line** to today's daily log under `## Key Learnings`:
+   `- [{Title}](notes/{slug}.md) — {one-line takeaway}`
+   - If the section does not exist, create it at the end of the file.
+   - If the daily log does not exist, create it with a `# Daily Report` heading and
+     that single section.
+   - Appending one line in this mode needs **no confirmation** — the "never overwrite"
+     rule still holds for every other section, which you must leave untouched.
+4. Output only the paths written. No summary, no commentary.
 
 ## Journal Directory
 
@@ -112,6 +136,32 @@ Omit any section that has no content (e.g., no "Problems Solved" if none were en
 - {Point 1}
 - {Point 2}
 - {Consideration or constraint}
+```
+
+**Code explanation** (written by the `mentor` skill via `note-only` mode):
+```markdown
+# {What the change or the code does}
+
+**Date:** {YYYY-MM-DD} | **Project:** {project name} | **Tags:** code-explanation, {language}, {tag}
+
+## Context
+{Where this code lives and what triggered the change.}
+
+## The change
+{What changed, in terms of consequences.}
+
+## How it works
+{The non-obvious mechanics. Keep the mechanism, drop the narration.}
+
+## Why this approach
+{The constraint that decided it, and what was dropped.}
+
+## Alternatives
+1. {Approach} — cost: {what it forces}. Wins when: {context}.
+2. {Approach} — cost: {what it forces}. Wins when: {context}.
+
+## Key Takeaway
+{One sentence to remember next time the same decision comes up.}
 ```
 
 ## Rules
