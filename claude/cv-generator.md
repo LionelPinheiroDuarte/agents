@@ -42,20 +42,27 @@ Extract:
 
 ### Step 3 — Tailor the content
 
-**Summary:** Rewrite the generic summary to mirror the job's vocabulary and
-priorities. Keep it 2-3 lines, centered, factual.
+**Pick an angle:** classify the offer into one or two `angles` (devops, cloud,
+sysadmin, backend, mobile, web, automation, ai, support). They drive every choice below.
+
+**Summary:** Start from the matching entry in `targets` (fall back to `personal.summary`),
+then rewrite it to mirror the job's vocabulary and priorities. Keep it 2-3 lines, centered, factual.
 
 **Skills table:**
-- ONLY include skills that appear in the `projects` section of profile.yaml
+- ONLY include skills that appear in the `projects` section of profile.yaml (`stack` or `highlights`), never those in `not_yet`
 - Never add skills from education or assumed knowledge
 - Reorder rows so the most relevant skills appear first for this offer
 - Drop rows with zero relevance to the offer
 
 **Projects:**
-- Select max 2-3 projects, ranked by relevance to the offer
+- Select max 2-3 projects whose `angles` match the offer, then rank by stack overlap
 - Drop any project that adds no value for this specific offer
 - Format each project with `\begin{itemize}` bullet points (never paragraph text)
-- Write 3-4 bullets per project
+- Write 3-4 bullets per project, built from that project's `highlights` (the verified
+  facts): pick the most relevant ones and rephrase with the offer's vocabulary
+- Never introduce a fact, tool or number absent from `highlights`, `stack` or `description`
+- Never claim anything listed in the project's `not_yet` — if the offer wants it, it can
+  appear only as "en cours" / "prévu" when `status` supports it
 - Each bullet must: start with a past-tense action verb, use vocabulary from the offer, be factual
 
 Good bullet verbs (French CV): Déployé, Automatisé, Mis en place, Configuré, Développé, Conçu,
@@ -106,7 +113,7 @@ If compilation fails, show the LaTeX error and fix it before cleaning up.
 ### Learned rules (from audit feedback)
 
 - **Dates consistency** — always use the same format throughout: either "Month YYYY" everywhere or "YYYY" everywhere. Never mix the two in the same document
-- **Minimum 2-3 metrics** — at least 2-3 bullets must contain a number (count, %, duration, scale). "3 successive environments" counts. If the profile has no numbers, add realistic scale indicators (e.g. "pipeline runs on every push", "infrastructure provisioned in < 10 min")
+- **Minimum 2-3 metrics** — at least 2-3 bullets must contain a number (count, %, duration, scale), taken from `highlights`. Never invent or estimate a number; if the selected projects lack enough metrics, prefer another relevant project that has them, and report the shortfall to the user
 - **LinkedIn check** — before finalizing, check if LinkedIn in profile.yaml is a placeholder. If so, warn the user explicitly and remove the broken href — do not leave a placeholder URL in the PDF
 - **Keyword body coverage** — after drafting, scan the offer's required stack and verify each keyword appears at least once in the body text (experiences or projects), not only in the skills table. If a keyword from the offer matches a skill in profile.yaml but is missing from the body, inject it into a relevant bullet
 
