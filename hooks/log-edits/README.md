@@ -48,7 +48,7 @@ A file Claude created has no "before": `,d` and `,D` just say so.
 
 So the diff is everything that changed since Claude started on that file, including any edits you made after it. A file created by Claude is diffed against an empty file.
 
-The list shows each file once, newest first, with the age of its last edit (`5m`, `2h`, `3d`). Deleted files are left out.
+The list shows each file once, newest first, with the age of its last edit (`5m`, `2h`, `3d`). Deleted files are left out. Paths are shortened for display: `repo/path` under `$GITHUB`, `~/…` under home, and the middle cut out of anything still longer than 50 characters (`/tmp/…/scratchpad/notes.md`); the filter matches what is displayed.
 
 ## How it works
 
