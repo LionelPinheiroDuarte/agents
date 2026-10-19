@@ -17,7 +17,7 @@ Inside the popup (the list, **before** pressing `enter`):
 |-----|--------|
 | type | Fuzzy-filter the list; the preview shows Claude's diff for the selected file |
 | `enter` | Open the file in Vim, in a new tmux window |
-| `ctrl+d` | Open the file directly in the before/after diff |
+| `ctrl+d` | Open the file directly in the `,d` diff view |
 | `ctrl+f` | Toggle the preview between the diff and the full file |
 | `esc` | Close |
 
@@ -27,13 +27,19 @@ Inside Vim (a file opened from the popup):
 
 | Key | Action |
 |-----|--------|
-| `,d` | Toggle the diff: Claude's "before" opens read-only on the left, the real file stays on the right |
+| `,d` | Claude's changes as a `git diff`-style view (`-` red, `+` green) in a full-screen tab; `q` or `,d` closes it |
+| `,D` | Side-by-side diff: Claude's "before" read-only on the left, the real file on the right; `,D` again closes it |
+
+The `,d` view diffs the buffer, so unsaved edits are included. In the side-by-side view:
+
+| Key | Action |
+|-----|--------|
 | `]c` / `[c` | Next / previous change |
 | `do` | *diff obtain*: pull the "before" version of this hunk into the file — undoes Claude's change |
 | `:diffupdate` | Recompute the diff after editing |
-| `q` | While the diff is open: close everything (plain `:q` only closes one side) |
+| `q` | Close both sides (plain `:q` only closes one) |
 
-A file Claude created has no "before": `,d` just says so.
+A file Claude created has no "before": `,d` and `,D` just say so.
 
 ## What "before" and "after" mean
 
@@ -75,7 +81,7 @@ Sessions older than **30 days** are deleted by the hook itself, at most once a d
 ## Limits
 
 - Only `Edit`, `Write` and `NotebookEdit` are recorded. A file Claude changes through `Bash` (`sed`, `>`, …) does not show up as an entry. If the same file was first touched by an `Edit` in that session, the diff still includes those later `Bash` changes, since "after" is the file on disk.
-- Files edited before snapshots existed show `no snapshot` and the full file; `ctrl+d` and `,d` do nothing for them.
+- Files edited before snapshots existed show `no snapshot` and the full file; `ctrl+d`, `,d` and `,D` do nothing for them.
 - The hook never blocks Claude or writes to the session: no stdout, always exit 0, standard library only.
 
 ## Setup
