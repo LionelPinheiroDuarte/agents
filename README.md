@@ -36,8 +36,8 @@ current session — so they keep the full context of the work in progress. Each 
 
 ## Claude Code Hooks
 
-Hooks are scripts Claude Code runs on session events. Each one lives in `hooks/` and is wired in the `hooks` block of [dotfiles' `settings.json`](https://github.com/LionelPinheiroDuarte/dotfiles/blob/main/.claude/settings.json).
+Hooks are scripts Claude Code runs on session events. Each one lives in `hooks/<name>/` with its own README, and is wired in the `hooks` block of [dotfiles' `settings.json`](https://github.com/LionelPinheiroDuarte/dotfiles/blob/main/.claude/settings.json).
 
 | Hook | Event | Description |
 |------|-------|-------------|
-| [`log-edits`](./hooks/log-edits.py) | `PostToolUse` (`Edit\|Write\|NotebookEdit`) | Logs every file Claude writes to `~/.local/state/claude/edits.log`, for the `claude-edits` tmux popup in dotfiles |
+| [`log-edits`](./hooks/log-edits/README.md) | `PostToolUse` (`Edit\|Write\|NotebookEdit`) | Logs every file Claude writes and snapshots its previous content, for the `claude-edits` tmux popup in dotfiles (list, diff, vimdiff) |
