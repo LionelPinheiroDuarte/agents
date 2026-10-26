@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Runs the project's checks (types, lint, tests), silent when they pass.
+# Usage: proj-check [--related] [--lines N]
+#   --related   tests only for the files changed since HEAD (fast TDD loop)
+#   --lines N   lines of output shown for a failing step (default 40)
+#
+# The stack is detected (Node, Go, Python, Terraform, shell). A `.proj-check`
+# file at the repo root replaces detection, one step per line:
+#   name: command
+# with `{related}` in a command replaced by the changed files in --related mode.
+
+set -uo pipefail
+
+related=0
+lines=40
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --related) related=1 ;;
+    --lines) lines="$2"; shift ;;
+    -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "proj-check: unknown option $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
+cd "$root" || exit 2
+
+changed=$( { git diff --name-only HEAD 2>/dev/null; git ls-files -o --exclude-standard 2>/dev/null; } | sort -u | while read -r f; do [ -f "$f" ] && echo "$f"; done)
+
+names=()
+cmds=()
+add() { names+=("$1"); cmds+=("$2"); }
+has_script() { node -e "process.exit(require('./package.json').scripts?.['$1'] ? 0 : 1)" 2>/dev/null; }
+has_dep() { node -e "const p=require('./package.json');process.exit({...p.dependencies,...p.devDependencies}['$1'] ? 0 : 1)" 2>/dev/null; }
+
+if [ -f .proj-check ]; then
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    add "${line%%:*}" "$(sed 's/^[^:]*:[[:space:]]*//' <<<"$line")"
+  done < .proj-check
+else
+  if [ -f package.json ]; then
+    if has_script typecheck; then add types "npm run -s typecheck"
+    elif [ -f tsconfig.json ]; then add types "npx --no-install tsc --noEmit"; fi
+    if has_script lint; then add lint "npm run -s lint"
+    elif ls eslint.config.* .eslintrc* >/dev/null 2>&1; then add lint "npx --no-install eslint ."; fi
+    if has_dep jest; then add tests "npx --no-install jest --silent {related_jest}"
+    elif has_dep vitest; then add tests "npx --no-install vitest run {related_vitest}"
+    elif has_script test; then add tests "npm test --silent"; fi
+  fi
+  if [ -f go.mod ]; then
+    add vet "go vet ./..."
+    add gofmt 'out=$(git ls-files "*.go" | grep -v "^vendor/" | xargs -r gofmt -l 2>&1); [ -z "$out" ] || { echo "not formatted:"; echo "$out"; exit 1; }'
+    add tests "go test {related_go}"
+  fi
+  if [ -f pyproject.toml ] || [ -f setup.py ] || [ -f requirements.txt ]; then
+    command -v ruff >/dev/null && add lint-py "ruff check ."
+    if grep -qs '\[tool.mypy\]' pyproject.toml || [ -f mypy.ini ]; then add types-py "python3 -m mypy ."; fi
+    if [ -d tests ] || grep -qs '\[tool.pytest' pyproject.toml; then add tests-py "python3 -m pytest -q {related_py}"; fi
+  fi
+  if ls ./*.tf >/dev/null 2>&1; then
+    add tf-fmt "terraform fmt -check -recursive"
+    [ -d .terraform ] && add tf-validate "terraform validate -no-color"
+  fi
+  if command -v shellcheck >/dev/null && git ls-files '*.sh' | grep -q .; then
+    add shellcheck "git ls-files -z '*.sh' | xargs -0 shellcheck -S warning"
+  fi
+fi
+
+if [ ${#names[@]} -eq 0 ]; then
+  echo "proj-check: no check detected in $root (add a .proj-check file)" >&2
+  exit 2
+fi
+
+# Fill the {related*} placeholders.
+src=$(grep -E '\.(js|jsx|ts|tsx|mjs|cjs)$' <<<"$changed" | tr '\n' ' ')
+gopkgs=$(grep -E '\.go$' <<<"$changed" | xargs -r -n1 dirname | sort -u | sed 's|^|./|' | tr '\n' ' ')
+pyfiles=$(grep -E '(^|/)test_[^/]*\.py$|_test\.py$' <<<"$changed" | tr '\n' ' ')
+fill() {
+  local c="$1"
+  if [ "$related" -eq 1 ]; then
+    c=${c//\{related_jest\}/--findRelatedTests --passWithNoTests $src}
+    c=${c//\{related_vitest\}/related --passWithNoTests $src}
+    c=${c//\{related_go\}/${gopkgs:-./...}}
+    c=${c//\{related_py\}/$pyfiles}
+    c=${c//\{related\}/$changed}
+  else
+    c=${c//\{related_jest\}/}
+    c=${c//\{related_vitest\}/}
+    c=${c//\{related_go\}/./...}
+    c=${c//\{related_py\}/}
+    c=${c//\{related\}/}
+  fi
+  echo "$c"
+}
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+ok=0
+failed=()
+timings=()
+for i in "${!names[@]}"; do
+  name=${names[$i]}
+  if [ "$related" -eq 1 ] && [[ "${cmds[$i]}" == *"{related"* ]] && [ -z "$changed" ]; then
+    timings+=("$name skipped")
+    continue
+  fi
+  start=$SECONDS
+  if bash -c "$(fill "${cmds[$i]}")" >"$tmp" 2>&1; then
+    ok=$((ok + 1))
+    timings+=("$name $((SECONDS - start))s")
+  else
+    failed+=("$name")
+    timings+=("$name FAILED")
+    echo "── $name failed: $(fill "${cmds[$i]}")"
+    tail -n "$lines" "$tmp"
+    echo
+  fi
+done
+
+summary=$(IFS=,; echo "${timings[*]}" | sed 's/,/, /g')
+if [ ${#failed[@]} -eq 0 ]; then
+  echo "check: ok ($summary)"
+else
+  echo "check: FAILED ${failed[*]} — $ok/${#names[@]} ok ($summary)"
+  exit 1
+fi
