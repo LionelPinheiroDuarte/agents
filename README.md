@@ -79,6 +79,7 @@ Cloud and infrastructure.
 
 | Agent | What it does |
 |-------|--------------|
+| [`ansible-expert`](./claude/devops/ansible-expert.md) | Writes, reviews and debugs Ansible playbooks, roles and inventories; grounded in *Ansible: Up & Running* |
 | [`cloud-auditor`](./claude/devops/cloud-auditor.md) | Audits an AWS project against Well-Architected, CIS, Terraform best practices and FinOps |
 
 ### Docs & content — `claude/docs/`
