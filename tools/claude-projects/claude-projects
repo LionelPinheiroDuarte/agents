@@ -1,0 +1,175 @@
+#!/bin/bash
+# One tmux session per project, each with Claude Code running in it: pick a
+# project, jump to its session (created on the fly), and get them all back
+# after a reboot with Claude resuming its last conversation. Meant to run in a
+# tmux popup (see dotfiles' .tmux.conf), but every command also works from a
+# shell.
+#
+#   claude-projects                 pick a project (fzf)
+#   claude-projects open <dir>      open (or jump to) the project in <dir>
+#   claude-projects save            remember the open project sessions
+#   claude-projects restore         reopen every saved project
+#   claude-projects kill <name>     close a project session
+#   claude-projects state <state>   running|done|none, from Claude Code hooks
+#
+# A project session has two windows: "claude" (claude in the repo) and
+# "shell". Sessions created here carry the @claude_project option (their
+# directory), which is how they are told apart from other tmux sessions.
+#
+# Claude's state: hooks in dotfiles' settings.json call `state` from inside
+# the pane where Claude runs, which sets @claude_state on its session. Running
+# when a prompt is sent, done when Claude has answered, cleared when Claude
+# exits or when you switch to the session (the tmux hook in .tmux.conf). The
+# status bar shows the same marks for the other sessions.
+#
+# Saved list: one "name<TAB>dir" line per project. It is rewritten when a
+# project is opened or killed from here, and by `save`. Not on tmux's own
+# session-closed hook: when the server dies (logout, reboot) every session
+# closes, and the hook would empty the list right before it is needed.
+#
+# Keys in the list: enter = go (create if needed) · ctrl-x = kill the session
+# Marks: ⟳ Claude working · ✓ Claude answered · ● open · ↺ saved, reopened
+# with `claude --continue` · (none) other repo
+
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/claude"
+SAVED="$STATE/projects.tsv"
+GITHUB_DIR="${GITHUB:-$HOME/repos/github}"
+
+# tmux refuses "." and ":" in session names.
+session_name() { basename "$1" | tr '.:' '__'; }
+
+# "name<TAB>dir" for every open project session.
+open_projects() {
+  tmux list-sessions -F '#{session_name}	#{@claude_project}' 2>/dev/null \
+    | awk -F'\t' '$2 != ""'
+}
+
+# Set Claude's state on the session of the pane it runs in. An answer you
+# are already looking at (session attached, Claude's window in front) is not
+# marked. Silent, and a no-op outside tmux: hooks must not print or fail.
+set_state() {
+  [ -n "$TMUX_PANE" ] || return 0
+  local state="$1"
+  [ "$state" = done ] \
+    && [ "$(tmux display-message -p -t "$TMUX_PANE" \
+         '#{&&:#{session_attached},#{window_active}}')" = 1 ] \
+    && state=none
+  case "$state" in
+    running|done) tmux set-option -t "$TMUX_PANE" @claude_state "$state" ;;
+    none)         tmux set-option -t "$TMUX_PANE" -u @claude_state ;;
+  esac
+} >/dev/null 2>&1
+
+save() {
+  mkdir -p "$STATE"
+  open_projects >"$SAVED.tmp" && mv "$SAVED.tmp" "$SAVED"
+}
+
+# Go to a session: switch this client when inside tmux, attach otherwise.
+go_to() {
+  if [ -n "$TMUX" ]; then tmux switch-client -t "=$1"; else tmux attach -t "=$1"; fi
+}
+
+# Create the session for <dir> unless it exists. With "continue", Claude
+# resumes the directory's last conversation (falls back to a new one when
+# there is none). The pane drops to a shell when Claude exits, so the window
+# stays open.
+create() {
+  local dir="$1" mode="$2" name; name=$(session_name "$dir")
+  tmux has-session -t "=$name" 2>/dev/null && return
+  local cmd="claude"
+  [ "$mode" = continue ] && cmd="claude --continue || claude"
+  tmux new-session -d -s "$name" -c "$dir" -n claude "$cmd; exec \$SHELL"
+  # set-option takes no "=" exact-match prefix; the name was just created.
+  tmux set-option -t "$name" @claude_project "$dir"
+  tmux new-window -d -t "=$name:" -c "$dir" -n shell
+}
+
+open() {
+  local dir; dir=$(realpath "$1") || exit 1
+  [ -d "$dir" ] || { echo "Not a directory: $1" >&2; exit 1; }
+  local mode=new
+  grep -q "	$dir\$" "$SAVED" 2>/dev/null && mode="continue"
+  create "$dir" "$mode"
+  save
+  go_to "$(session_name "$dir")"
+}
+
+restore() {
+  [ -s "$SAVED" ] || { echo "No saved projects ($SAVED)."; return; }
+  local first="" name dir
+  while IFS=$'\t' read -r name dir; do
+    [ -d "$dir" ] || { echo "skip $name: $dir is gone"; continue; }
+    create "$dir" continue
+    first="${first:-$(session_name "$dir")}"
+    echo "restored $name"
+  done <"$SAVED"
+  [ -n "$first" ] && go_to "$first"
+}
+
+kill_project() {
+  # Don't pull the client out of tmux: leave the session first if it is ours.
+  if [ -n "$TMUX" ] && [ "$(tmux display-message -p '#S')" = "$1" ]; then
+    tmux switch-client -l 2>/dev/null || tmux switch-client -n
+  fi
+  tmux kill-session -t "=$1" && save
+}
+
+# fzf preview: branch, last commits and pending changes of the project.
+preview() {
+  local dir="$1"
+  echo "$dir"
+  git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+  echo
+  git -C "$dir" -c color.ui=always status -sb | head -15
+  echo
+  git -C "$dir" log --oneline --color=always -8
+}
+
+# "<mark> <name><TAB><dir>": open sessions, then saved ones, then other repos.
+entries() {
+  declare -A seen
+  declare -A marks=([running]='⟳' [done]='✓')
+  local name dir state
+  # awk first: read would collapse the empty dir of a non-project session.
+  while IFS=$'\t' read -r name dir state; do
+    printf '%s %s\t%s\n' "${marks[${state:-none}]:-●}" "$name" "$dir"; seen[$dir]=1
+  done < <(tmux list-sessions \
+    -F '#{session_name}	#{@claude_project}	#{@claude_state}' 2>/dev/null \
+    | awk -F'\t' '$2 != ""')
+  if [ -s "$SAVED" ]; then
+    while IFS=$'\t' read -r name dir; do
+      [ -n "${seen[$dir]}" ] && continue
+      printf '↺ %s\t%s\n' "$name" "$dir"; seen[$dir]=1
+    done <"$SAVED"
+  fi
+  for dir in "$GITHUB_DIR"/*/; do
+    dir="${dir%/}"
+    [ -n "${seen[$dir]}" ] && continue
+    printf '  %s\t%s\n' "$(session_name "$dir")" "$dir"
+  done
+}
+
+pick() {
+  local self; self=$(realpath "$0")
+  local line
+  line=$(entries | fzf --prompt 'project> ' --delimiter '\t' --with-nth 1 \
+    --preview-window 'right,60%' \
+    --header 'enter: go · ctrl-x: kill · ⟳ working · ✓ answered · ● open · ↺ saved' \
+    --preview "'$self' --preview {2}" \
+    --bind "ctrl-x:execute-silent('$self' kill {1})+reload('$self' --entries)")
+  [ -n "$line" ] || exit 0
+  open "$(cut -f2 <<<"$line")"
+}
+
+case "$1" in
+  "")         pick ;;
+  open)       open "${2:-$PWD}" ;;
+  save)       save; echo "Saved $(wc -l <"$SAVED") project(s) to $SAVED" ;;
+  restore)    restore ;;
+  kill)       kill_project "${2##* }" ;;  # fzf passes "<mark> <name>"
+  state)      set_state "$2" ;;
+  --preview)  preview "$2" ;;
+  --entries)  entries ;;
+  *)          sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

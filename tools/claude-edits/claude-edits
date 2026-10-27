@@ -1,0 +1,118 @@
+#!/bin/bash
+# Fuzzy-pick a file recently written by Claude Code, see what Claude changed
+# in it, and open it in Vim in a new tmux window. Meant to run inside a tmux
+# popup (see dotfiles' .tmux.conf).
+#
+# The data comes from the log-edits hook (agents/hooks/log-edits/): the list
+# is newest first, one entry per file, deleted files skipped. "Before" is the
+# file as it was before Claude's first edit in the most recent session that
+# touched it; "after" is the file on disk now.
+#
+#   claude-edits          all sessions
+#   claude-edits <dir>    only files under <dir> (e.g. the pane's repo)
+#
+# Keys in the list: enter = vim · ctrl-d = vimdiff before/after · ctrl-f = diff/file
+# Keys in Vim (claude-edits.vim): ,d = git-diff-like view · ,D = side-by-side vimdiff
+
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/claude"
+LOG="$STATE/edits.log"
+SNAPSHOTS="$STATE/snapshots"
+PREVIEW=$(command -v batcat || command -v bat)
+MODE="${TMPDIR:-/tmp}/claude-edits-mode.$$"
+VIMSCRIPT="$(dirname "$(realpath "$0")")/claude-edits.vim"
+
+# Print the "before" file for a path ("/dev/null" if Claude created it),
+# or nothing if no snapshot exists.
+before_of() {
+  local path="$1" session dir
+  session=$(awk -F'\t' -v p="$path" '$3 == p { s = $2 } END { print s }' "$LOG")
+  dir="$SNAPSHOTS/${session:-unknown}/$(printf '%s' "$path" | sha1sum | cut -c1-40)"
+  [ -d "$dir" ] || return
+  if [ -e "$dir/new" ]; then echo /dev/null; return; fi
+  ls "$dir"/*.orig 2>/dev/null | head -1
+}
+
+show_file() {
+  if [ -n "$PREVIEW" ]; then "$PREVIEW" --color=always --style=numbers "$1"; else cat "$1"; fi
+}
+
+# Open a file in Vim in a new tmux window, with ,d ready to show Claude's diff.
+# Extra args are passed to vim (e.g. -c ClaudeDiff to start in the diff).
+open_in_vim() {
+  local path="$1" before="$2"; shift 2
+  local name; name=$(basename "$path")
+  [ $# -gt 0 ] && name="diff:$name"
+  tmux new-window -c "$(dirname "$path")" -n "$name" \
+    "vim -c \"let g:claude_before='$before'\" -S '$VIMSCRIPT' $* '$path'"
+}
+
+case "$1" in
+  --preview)
+    path="$2"
+    if [ "$(cat "$3" 2>/dev/null)" = file ]; then show_file "$path"; exit 0; fi
+    before=$(before_of "$path")
+    if [ -z "$before" ]; then
+      echo "no snapshot: edited before diffs were recorded"
+      echo
+      show_file "$path"
+    elif diff -q "$before" "$path" >/dev/null; then
+      echo "no changes left (reverted since Claude's edit)"
+    else
+      diff -u --color=always --label "before (claude)" --label "$path" "$before" "$path"
+    fi
+    exit 0
+    ;;
+  --toggle)
+    if [ "$(cat "$2" 2>/dev/null)" = file ]; then echo diff >"$2"; else echo file >"$2"; fi
+    exit 0
+    ;;
+  --vimdiff)
+    path="$2"
+    before=$(before_of "$path")
+    [ -n "$before" ] || exit 0
+    open_in_vim "$path" "$before" -c ClaudeDiff
+    exit 0
+    ;;
+esac
+
+if [ ! -s "$LOG" ]; then
+  echo "No edits logged yet ($LOG)."
+  read -rsn1
+  exit 0
+fi
+
+filter="${1:+$(realpath "$1")/}"
+self=$(realpath "$0")
+trap 'rm -f "$MODE"' EXIT
+
+# newest first, one line per file: "<age>\t<short path>\t<path>"; only the first
+# two are shown, the full path stays in a hidden field for the actions
+now=$(date +%s)
+GITHUB_DIR="${GITHUB:-$HOME/Repos/github}"
+file=$(tac "$LOG" | awk -F'\t' '!seen[$3]++ { print $1 "\t" $3 }' \
+  | while IFS=$'\t' read -r ts f; do
+      [[ -f "$f" && "$f" == "$filter"* ]] || continue
+      age=$(( now - ts ))
+      if   (( age < 3600 ));  then age="$(( age / 60 ))m"
+      elif (( age < 86400 )); then age="$(( age / 3600 ))h"
+      else                         age="$(( age / 86400 ))d"; fi
+      short="$f"
+      if [[ "$f" == "$GITHUB_DIR"/* ]]; then short="${f#"$GITHUB_DIR"/}"
+      elif [[ "$f" == "$HOME"/* ]]; then short="~/${f#"$HOME"/}"; fi
+      # still too long: keep the top dir and the last two levels, cut the middle
+      if (( ${#short} > 50 )); then
+        IFS=/ read -ra parts <<<"$short"
+        (( ${#parts[@]} > 4 )) && short="${parts[0]}/${parts[1]}/…/${parts[-2]}/${parts[-1]}"
+      fi
+      printf '%4s\t%s\t%s\n' "$age" "$short" "$f"
+    done \
+  | fzf --prompt 'search> ' --delimiter '\t' --with-nth 1,2 \
+        --preview-window 'right,66%' \
+        --header 'enter: vim (then ,d for the diff) · ctrl-d: diff now · ctrl-f: diff/file preview' \
+        --preview "'$self' --preview {3} '$MODE'" \
+        --bind "ctrl-f:execute-silent('$self' --toggle '$MODE')+refresh-preview" \
+        --bind "ctrl-d:execute-silent('$self' --vimdiff {3})+abort" \
+  | cut -f3)
+
+[ -n "$file" ] || exit 0
+open_in_vim "$file" "$(before_of "$file")"

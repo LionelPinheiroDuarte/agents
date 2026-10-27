@@ -13,7 +13,8 @@ agents/
 ├── claude/     # Claude Code agents (Anthropic)
 ├── framework/  # How I run a project: rules + templates
 ├── hooks/      # Claude Code hooks (wired in dotfiles' settings.json)
-└── skills/     # Claude Code skills (slash commands)
+├── skills/     # Claude Code skills (slash commands)
+└── tools/      # tmux popups around Claude Code (bound in dotfiles' .tmux.conf)
 ```
 
 ## Claude Code Agents
@@ -128,4 +129,13 @@ Hooks are scripts Claude Code runs on session events. Each one lives in `hooks/<
 
 | Hook | Event | Description |
 |------|-------|-------------|
-| [`log-edits`](./hooks/log-edits/README.md) | `PostToolUse` (`Edit\|Write\|NotebookEdit`) | Logs every file Claude writes and snapshots its previous content, for the `claude-edits` tmux popup in dotfiles (list, diff, vimdiff) |
+| [`log-edits`](./hooks/log-edits/README.md) | `PostToolUse` (`Edit\|Write\|NotebookEdit`) | Logs every file Claude writes and snapshots its previous content, for the [`claude-edits`](./tools/claude-edits/README.md) tmux popup (list, diff, vimdiff) |
+
+## Tools
+
+Shell scripts that make Claude Code easier to drive from tmux. Each one lives in `tools/<name>/` with its own README; dotfiles symlinks them into `~/.local/bin` and binds them in [`.tmux.conf`](https://github.com/LionelPinheiroDuarte/dotfiles/blob/main/tmux/.tmux.conf).
+
+| Tool | Key | What it does |
+|------|-----|--------------|
+| [`claude-edits`](./tools/claude-edits/README.md) | `prefix + e` / `E` | Lists the files Claude recently wrote, shows its diff and opens them in Vim; fed by the `log-edits` hook |
+| [`claude-projects`](./tools/claude-projects/README.md) | `prefix + g` | One tmux session per project with Claude in it; shows where Claude is working (⟳) or has answered (✓), restores the sessions after a reboot with `claude --continue` |
