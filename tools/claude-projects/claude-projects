@@ -33,7 +33,9 @@
 
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/claude"
 SAVED="$STATE/projects.tsv"
-GITHUB_DIR="${GITHUB:-$HOME/repos/github}"
+# same fallback as the dotfiles: ~/Repos/github, else ~/repos/github
+GITHUB_DIR="${GITHUB:-$HOME/Repos/github}"
+[[ ! -d "$GITHUB_DIR" && -d "$HOME/repos/github" ]] && GITHUB_DIR="$HOME/repos/github"
 
 # tmux refuses "." and ":" in session names.
 session_name() { basename "$1" | tr '.:' '__'; }
