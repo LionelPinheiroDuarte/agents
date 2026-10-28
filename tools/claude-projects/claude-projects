@@ -6,7 +6,9 @@
 # shell.
 #
 #   claude-projects                 pick a project (fzf)
-#   claude-projects open <dir>      open (or jump to) the project in <dir>
+#   claude-projects open <dir> [shell]  open (or jump to) the project in <dir>,
+#                                   on its shell window with "shell"
+#   claude-projects new <name>      create $GITHUB/<name> (git init) and open it
 #   claude-projects save            remember the open project sessions
 #   claude-projects restore         reopen every saved project
 #   claude-projects kill <name>     close a project session
@@ -17,10 +19,11 @@
 # directory), which is how they are told apart from other tmux sessions.
 #
 # Claude's state: hooks in dotfiles' settings.json call `state` from inside
-# the pane where Claude runs, which sets @claude_state on its session. Running
-# when a prompt is sent, done when Claude has answered, cleared when Claude
-# exits or when you switch to the session (the tmux hook in .tmux.conf). The
-# status bar shows the same marks for the other sessions.
+# the pane where Claude runs, which sets @claude_state on its session (and
+# @claude_state_at, when it changed). Running when a prompt is sent, done when
+# Claude has answered, cleared when Claude exits or when you switch to the
+# session (the tmux hook in .tmux.conf). The status bar shows the same marks
+# for the other sessions.
 #
 # Saved list: one "name<TAB>dir" line per project. It is rewritten when a
 # project is opened or killed from here, and by `save`. Not on tmux's own
@@ -28,17 +31,23 @@
 # closes, and the hook would empty the list right before it is needed.
 #
 # Keys in the list: enter = go (create if needed) · ctrl-x = kill the session
+#   ctrl-n = new project named after the query · ctrl-r = restore all saved
+#   ctrl-s = go, on the shell window · ctrl-/ = preview
 # Marks: ⟳ Claude working · ✓ Claude answered · ● open · ↺ saved, reopened
-# with `claude --continue` · (none) other repo
+# with `claude --continue` · ◇ no project (Claude in ~) · (none) other repo
+#
+# The popup needs fzf >= 0.66; the "last exchange" section of the preview
+# needs jq and is left out without it.
 
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/claude"
 SAVED="$STATE/projects.tsv"
-# same fallback as the dotfiles: ~/Repos/github, else ~/repos/github
-GITHUB_DIR="${GITHUB:-$HOME/Repos/github}"
-[[ ! -d "$GITHUB_DIR" && -d "$HOME/repos/github" ]] && GITHUB_DIR="$HOME/repos/github"
+source "$(dirname "$(realpath "$0")")/../lib/popup.sh"
 
-# tmux refuses "." and ":" in session names.
-session_name() { basename "$1" | tr '.:' '__'; }
+# tmux refuses "." and ":" in session names. ~ is the session without a
+# project, "home" (the name the dotfiles' `home` script gives it).
+session_name() {
+  if [ "$1" = "$HOME" ]; then echo home; else basename "$1" | tr '.:' '__'; fi
+}
 
 # "name<TAB>dir" for every open project session.
 open_projects() {
@@ -57,8 +66,14 @@ set_state() {
          '#{&&:#{session_attached},#{window_active}}')" = 1 ] \
     && state=none
   case "$state" in
-    running|done) tmux set-option -t "$TMUX_PANE" @claude_state "$state" ;;
-    none)         tmux set-option -t "$TMUX_PANE" -u @claude_state ;;
+    running|done)
+      # the age shown in the popup counts from the last change of state
+      [ "$(tmux show-options -qv -t "$TMUX_PANE" @claude_state)" = "$state" ] \
+        || tmux set-option -t "$TMUX_PANE" @claude_state_at "$EPOCHSECONDS"
+      tmux set-option -t "$TMUX_PANE" @claude_state "$state" ;;
+    none)
+      tmux set-option -t "$TMUX_PANE" -u @claude_state
+      tmux set-option -t "$TMUX_PANE" -u @claude_state_at ;;
   esac
 } >/dev/null 2>&1
 
@@ -68,8 +83,10 @@ save() {
 }
 
 # Go to a session: switch this client when inside tmux, attach otherwise.
+# With a window name, land on that window.
 go_to() {
-  if [ -n "$TMUX" ]; then tmux switch-client -t "=$1"; else tmux attach -t "=$1"; fi
+  local target="=$1${2:+:$2}"
+  if [ -n "$TMUX" ]; then tmux switch-client -t "$target"; else tmux attach -t "$target"; fi
 }
 
 # Create the session for <dir> unless it exists. With "continue", Claude
@@ -78,7 +95,11 @@ go_to() {
 # stays open.
 create() {
   local dir="$1" mode="$2" name; name=$(session_name "$dir")
-  tmux has-session -t "=$name" 2>/dev/null && return
+  if tmux has-session -t "=$name" 2>/dev/null; then
+    # a home session opened by the `home` script has no @claude_project: adopt it
+    [ "$dir" = "$HOME" ] && tmux set-option -t "$name" @claude_project "$dir"
+    return
+  fi
   local cmd="claude"
   [ "$mode" = continue ] && cmd="claude --continue || claude"
   tmux new-session -d -s "$name" -c "$dir" -n claude "$cmd; exec \$SHELL"
@@ -94,7 +115,19 @@ open() {
   grep -q "	$dir\$" "$SAVED" 2>/dev/null && mode="continue"
   create "$dir" "$mode"
   save
-  go_to "$(session_name "$dir")"
+  go_to "$(session_name "$dir")" "$2"
+}
+
+# A new repo under $GITHUB, opened like any other; an existing one is just opened.
+new_project() {
+  local name="${1//[^A-Za-z0-9._-]/-}"
+  name=$(sed 's/^-*//; s/-*$//' <<<"$name")
+  [ -n "$name" ] || { echo "Usage: claude-projects new <name>" >&2; exit 1; }
+  local dir="$GITHUB_DIR/$name"
+  if [ ! -d "$dir" ]; then
+    mkdir -p "$dir" && git -C "$dir" init -q || exit 1
+  fi
+  open "$dir"
 }
 
 restore() {
@@ -117,61 +150,242 @@ kill_project() {
   tmux kill-session -t "=$1" && save
 }
 
-# fzf preview: branch, last commits and pending changes of the project.
-preview() {
-  local dir="$1"
-  echo "$dir"
-  git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || exit 0
-  echo
-  git -C "$dir" -c color.ui=always status -sb | head -15
-  echo
-  git -C "$dir" log --oneline --color=always -8
+# Sets BRANCH, AHEAD, BEHIND ("" without an upstream) and DIRTY (files) for
+# <dir>, in one git call; fails outside a repo.
+repo_status() {
+  local out; out=$(git -C "$1" status --porcelain=v2 --branch 2>/dev/null) || return 1
+  read -r BRANCH AHEAD BEHIND DIRTY < <(awk '
+    /^# branch.head / { h = $3 } /^# branch.ab / { a = substr($3, 2); b = substr($4, 2) }
+    !/^#/ { d++ } END { print h, (a == "" ? "-" : a), (b == "" ? "-" : b), d + 0 }' <<<"$out")
+  [ "$AHEAD" = - ] && AHEAD="" BEHIND=""
+  return 0
 }
 
-# "<mark> <name><TAB><dir>": open sessions, then saved ones, then other repos.
+# Sets BRANCH and COMMITTED (epoch of the last commit) for <dir>, in one git
+# call; BRANCH falls back to symbolic-ref in a repo with no commit yet.
+repo_head() {
+  local refs
+  IFS=$'\t' read -r COMMITTED refs < <(git -C "$1" log -1 --format='%ct%x09%D' 2>/dev/null)
+  BRANCH=$(sed -n 's/^HEAD -> \([^,]*\).*/\1/p' <<<"$refs")
+  [ -n "$BRANCH" ] || BRANCH=$(git -C "$1" symbolic-ref --short -q HEAD 2>/dev/null)
+}
+
+# The fzf input, one line per project under a header line per group:
+#   <header>\t<row>\t<dir>\t<session name>\t<kind>
+# Also writes "<active> <open> <saved> <headers>" to $COUNTS for the counter
+# (see info).
 entries() {
   declare -A seen
-  declare -A marks=([running]='⟳' [done]='✓')
-  local name dir state
-  # awk first: read would collapse the empty dir of a non-project session.
-  while IFS=$'\t' read -r name dir state; do
-    printf '%s %s\t%s\n' "${marks[${state:-none}]:-●}" "$name" "$dir"; seen[$dir]=1
+  local -a kind name dir branch changes age
+
+  # one row; <changes> is "±3 ↑2" (modified files, commits not pushed), only
+  # for open and saved projects: git status on every repo would slow the popup
+  add() {
+    local k="$1" n="$2" d="$3" at="$4" ch="" COMMITTED=""
+    if [ "$k" = repo ] || [ "$k" = home ]; then
+      repo_head "$d"
+    elif repo_status "$d"; then
+      (( DIRTY > 0 )) && ch="±$DIRTY"
+      (( ${AHEAD:-0} > 0 )) && ch="${ch:+$ch }↑$AHEAD"
+      ch=${ch:-·}
+      [ -n "$at" ] || { repo_head "$d"; at=$COMMITTED; }
+    else
+      BRANCH=""
+    fi
+    kind+=("$k") name+=("$n") dir+=("$d") branch+=("$BRANCH") changes+=("$ch")
+    age+=("$(ago "${at:-$COMMITTED}")") seen[$d]=1
+  }
+
+  # open sessions, Claude working or answered first. "|" separates the fields,
+  # as read would collapse a run of tabs (@claude_state is often empty) and
+  # tmux escapes control characters; the directory comes last, so it may hold one
+  local s d st at act
+  while IFS='|' read -r st at act s d; do
+    add "${st:-open}" "$s" "$d" "${at:-$act}"
   done < <(tmux list-sessions \
-    -F '#{session_name}	#{@claude_project}	#{@claude_state}' 2>/dev/null \
-    | awk -F'\t' '$2 != ""')
+    -F '#{@claude_state}|#{@claude_state_at}|#{session_activity}|#{session_name}|#{@claude_project}' 2>/dev/null \
+    | awk -F'|' '$5 != "" { print ($1 == "running" ? 0 : $1 == "done" ? 1 : 2) "|" $0 }' \
+    | sort -t'|' -k1,1n -s | cut -d'|' -f2-)
+
   if [ -s "$SAVED" ]; then
-    while IFS=$'\t' read -r name dir; do
-      [ -n "${seen[$dir]}" ] && continue
-      printf '↺ %s\t%s\n' "$name" "$dir"; seen[$dir]=1
+    while IFS=$'\t' read -r s d; do
+      [[ -n "${seen[$d]}" || ! -d "$d" ]] || add saved "$s" "$d"
     done <"$SAVED"
   fi
-  for dir in "$GITHUB_DIR"/*/; do
-    dir="${dir%/}"
-    [ -n "${seen[$dir]}" ] && continue
-    printf '  %s\t%s\n' "$(session_name "$dir")" "$dir"
+
+  # no project: Claude in ~ (global CLAUDE.md only), while it is neither open
+  # nor saved
+  [ -n "${seen[$HOME]}" ] || add home home "$HOME"
+
+  for d in "$GITHUB_DIR"/*/; do
+    d="${d%/}"
+    [ -n "${seen[$d]}" ] || add repo "$(session_name "$d")" "$d"
   done
+
+  # column widths from the data, capped so the row fits the list pane
+  local i wn=4 wb=4 wc=1
+  for i in "${!name[@]}"; do
+    (( ${#name[i]} > wn )) && wn=${#name[i]}
+    (( ${#branch[i]} > wb )) && wb=${#branch[i]}
+    (( ${#changes[i]} > wc )) && wc=${#changes[i]}
+  done
+  (( wn > 20 )) && wn=20; (( wb > 14 )) && wb=14
+
+  local group="" g headers=0 active=0 opened=0 saved=0 mark nm
+  local github_short="${GITHUB_DIR/#$HOME/\~}"
+  for i in "${!name[@]}"; do
+    case ${kind[i]} in
+      running|done|open) g="SESSIONS OUVERTES" ;;
+      saved)             g="À RESTAURER" ;;
+      home)              g="SANS PROJET" ;;
+      repo)              g="DÉPÔTS $github_short" ;;
+    esac
+    if [ "$g" != "$group" ]; then
+      group=$g; (( headers++ ))
+      printf '%s\t\t\t\t\n' "${DIM}${g}${OFF}"
+    fi
+
+    printf -v nm "%-${wn}.${wn}s" "${name[i]}"
+    case ${kind[i]} in
+      running) mark="${ORG}⟳${OFF}" nm="${ORG}${nm}${OFF}"; (( active++ )) ;;
+      done)    mark="${GRN}✓${OFF}" nm="${BOLD}${nm}${OFF}"; (( active++ )) ;;
+      open)    mark="${BLU}●${OFF}" nm="${DIM}${nm}${OFF}"; (( opened++ )) ;;
+      saved)   mark="${PRP}↺${OFF}"; (( saved++ )) ;;
+      home)    mark="${DIM}◇${OFF}" ;;
+      repo)    mark=" " ;;
+    esac
+    printf "\t%s %s  ${DIM}%-${wb}.${wb}s${OFF}  ${YLW}%-${wc}s${OFF}  ${DIM}%7s${OFF}\t%s\t%s\t%s\n" \
+      "$mark" "$nm" "${branch[i]}" "${changes[i]}" "${age[i]}" "${dir[i]}" "${name[i]}" "${kind[i]}"
+  done
+
+  [ -n "$COUNTS" ] && echo "$active $opened $saved $headers" >"$COUNTS"
+}
+
+# Right side of the input line: what is open, then the match count.
+info() {
+  local active=0 opened=0 saved=0 headers=0
+  [ -s "$COUNTS" ] && read -r active opened saved headers <"$COUNTS"
+  local matched=$FZF_MATCH_COUNT total=$(( FZF_TOTAL_COUNT - headers ))
+  [ -z "$FZF_QUERY" ] && matched=$(( matched - headers ))
+  # only what is there, to leave room for the count
+  local text="" n word
+  for n in "$active actif" "$opened ouvert" "$saved sauvegardé"; do
+    word=${n#* }; n=${n%% *}
+    (( n > 0 )) && text+="$n $word$( (( n > 1 )) && echo s) · "
+  done
+  echo "${DIM}${text}${OFF}$matched/$total"
+}
+
+# Last prompt and the start of Claude's answer to it, from the newest
+# transcript of <dir>. That format is internal to Claude Code: if reading it
+# fails, the section is just left out.
+last_exchange() {
+  command -v jq >/dev/null || return
+  local f
+  f=$(ls -t "$HOME/.claude/projects/$(sed 's/[^A-Za-z0-9]/-/g' <<<"$1")"/*.jsonl 2>/dev/null | head -1)
+  [ -n "$f" ] || return
+  # tool results make most of the transcript's size: keep the messages only
+  tail -n 400 "$f" | grep -E '"type":"(user|assistant)"' | awk 'length < 20000' | jq -rs '
+    def text: .message.content
+      | if type == "string" then . else ([.[]? | select(.type == "text") | .text] | join(" ")) end;
+    def prompt: .type == "user" and (.isMeta | not) and (text | length > 0) and (text | startswith("<") | not);
+    (to_entries | map(select(.value | prompt)) | last) as $p
+    | if $p == null then empty else
+        ($p.value | text | gsub("\\s+"; " ")),
+        ([.[$p.key + 1:][] | select(.type == "assistant") | text | select(length > 0)] | last // "" | gsub("\\s+"; " "))
+      end' 2>/dev/null
+}
+
+# fzf preview: a card with Claude's state, the repo's state, the last
+# exchange with Claude and the last commits. <kind> comes from the row; only
+# the live state of an open session is asked to tmux.
+preview() {
+  local dir="$1" name="$2" kind="$3" cols="${FZF_PREVIEW_COLUMNS:-80}"
+  [ -n "$dir" ] || exit 0
+
+  local state="" at="" windows="" badge=""
+  case $kind in
+    running|done|open)
+      IFS='|' read -r state at windows < <(tmux display-message -p -t "=$name:" \
+        '#{@claude_state}|#{@claude_state_at}|#{W:#{window_name} · }')
+      windows=${windows% · }
+      case $state in
+        running) badge="${BG_ORG} ⟳ travaille${at:+ · $(ago "$at")} ${OFF}" ;;
+        done)    badge="${BG_GRN} ✓ a répondu${at:+ · $(ago "$at")} ${OFF}" ;;
+        *)       badge="${BLU}● ouvert${OFF}" ;;
+      esac ;;
+    saved) badge="${PRP}↺ sauvegardé${OFF}" ;;
+    home)  badge="${DIM}◇ sans projet${OFF}" ;;
+  esac
+  local plain; plain=$(sed 's/\x1b\[[0-9;]*m//g' <<<"$badge")
+  printf '%s%*s%s\n' "${BOLD}${name}${OFF}" $(( cols - ${#name} - ${#plain} - 1 )) "" "$badge"
+  echo "${DIM}${dir/#$HOME/\~}${OFF}"
+
+  if repo_status "$dir"; then
+    local line="${DIM}⎇ ${BRANCH}${OFF}"
+    [ -n "$AHEAD" ] && line+="  ${GRN}↑$AHEAD${OFF} ${RED}↓$BEHIND${OFF}"
+    if (( DIRTY == 0 )); then line+="  ${DIM}arbre propre${OFF}"
+    else                      line+="  ${YLW}±$DIRTY modifié$( (( DIRTY > 1 )) && echo s)${OFF}"; fi
+    [ -n "$windows" ] && line+="  ${DIM}fenêtres : ${OFF}$windows"
+    echo "$line"
+  fi
+
+  local prompt answer
+  { IFS= read -r prompt; IFS= read -r answer; } < <(last_exchange "$dir")
+  if [ -n "$prompt" ]; then
+    echo; echo "${DIM}DERNIER ÉCHANGE${OFF}"
+    echo "${ORG}›${OFF} ${DIM}$(cut -c1-$(( cols - 2 )) <<<"$prompt")${OFF}"
+    [ -n "$answer" ] && fold -s -w "$cols" <<<"$answer" | head -4
+  fi
+
+  local commits; commits=$(git -C "$dir" log -5 --format='%h%x09%ct%x09%s' 2>/dev/null)
+  if [ -n "$commits" ]; then
+    echo; echo "${DIM}DERNIERS COMMITS${OFF}"
+    local hash ts subject
+    while IFS=$'\t' read -r hash ts subject; do
+      echo "${YLW}${hash}${OFF} ${DIM}${subject:0:$(( cols - 20 ))}${OFF} $(ago "$ts")"
+    done <<<"$commits"
+  fi
 }
 
 pick() {
+  require_fzf
   local self; self=$(realpath "$0")
-  local line
-  line=$(entries | fzf --prompt 'project> ' --delimiter '\t' --with-nth 1 \
-    --preview-window 'right,60%' \
-    --header 'enter: go · ctrl-x: kill · ⟳ working · ✓ answered · ● open · ↺ saved' \
-    --preview "'$self' --preview {2}" \
-    --bind "ctrl-x:execute-silent('$self' kill {1})+reload('$self' --entries)")
-  [ -n "$line" ] || exit 0
-  open "$(cut -f2 <<<"$line")"
+  COUNTS=$(mktemp); export COUNTS
+  trap 'rm -f "$COUNTS"' EXIT
+
+  local footer="${KEY} ⏎ ${OFF} ouvrir   ${KEY} ^X ${OFF} fermer   ${KEY} ^N ${OFF} nouveau
+${KEY} ^R ${OFF} tout restaurer   ${KEY} ^S ${OFF} shell   ${KEY} ^/ ${OFF} aperçu
+${ORG}⟳${OFF} travaille  ${GRN}✓${OFF} a répondu  ${BLU}●${OFF} ouvert  ${PRP}↺${OFF} sauvegardé"
+
+  # --expect: the first output line is "ctrl-s" (go to the shell window) or
+  # empty (enter)
+  popup_fzf_opts '#f0a45d' "◆ projets claude" 'chercher un projet'
+  local out
+  out=$(entries | fzf "${POPUP_FZF[@]}" --footer "$footer" --expect ctrl-s \
+    --info-command "'$self' --info" \
+    --preview-window 'right,55%,border-left' \
+    --preview "'$self' --preview {3} {4} {5}" \
+    --bind "ctrl-x:execute-silent([ -n {3} ] && '$self' kill {4})+reload('$self' --entries)" \
+    --bind "ctrl-n:transform:[ -n {q} ] && echo \"become('$self' new {q})\"" \
+    --bind "ctrl-r:become('$self' restore)")
+  local key dir
+  key=$(head -1 <<<"$out")
+  dir=$(sed -n 2p <<<"$out" | cut -f3)
+  [ -n "$dir" ] || exit 0
+  open "$dir" "${key:+shell}"
 }
 
 case "$1" in
   "")         pick ;;
-  open)       open "${2:-$PWD}" ;;
+  open)       open "${2:-$PWD}" "$3" ;;
+  new)        new_project "$2" ;;
   save)       save; echo "Saved $(wc -l <"$SAVED") project(s) to $SAVED" ;;
   restore)    restore ;;
-  kill)       kill_project "${2##* }" ;;  # fzf passes "<mark> <name>"
+  kill)       [ -n "$2" ] && tmux has-session -t "=$2" 2>/dev/null && kill_project "$2" ;;
   state)      set_state "$2" ;;
-  --preview)  preview "$2" ;;
+  --preview)  preview "$2" "$3" "$4" ;;
   --entries)  entries ;;
+  --info)     info ;;
   *)          sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
