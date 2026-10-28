@@ -15,3 +15,5 @@ The dotfiles Ansible playbook symlinks the script into `~/.local/bin` and instal
 bind e display-popup -E -w 90% -h 80% -y '#{popup_pane_top}' "~/.local/bin/claude-edits"
 bind E display-popup -E -w 90% -h 80% -y '#{popup_pane_top}' "~/.local/bin/claude-edits '#{pane_current_path}'"
 ```
+
+The palette, ages, fzf version check and the fzf options shared by both popups live in [`tools/lib/popup.sh`](../lib/popup.sh), which the script sources from its real location (through the symlink), so the whole `tools/` directory must stay together.

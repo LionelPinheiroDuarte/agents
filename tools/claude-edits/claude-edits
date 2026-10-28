@@ -18,58 +18,28 @@
 # No dependency beyond fzf (>= 0.66), awk and coreutils; bat is used for the
 # file view when present.
 
+HERE="$(dirname "$(realpath "$0")")"
+source "$HERE/../lib/popup.sh"
+
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/claude"
 LOG="$STATE/edits.log"
 SNAPSHOTS="$STATE/snapshots"
-# same fallback as the dotfiles: ~/Repos/github, else ~/repos/github
-GITHUB_DIR="${GITHUB:-$HOME/Repos/github}"
-[[ ! -d "$GITHUB_DIR" && -d "$HOME/repos/github" ]] && GITHUB_DIR="$HOME/repos/github"
 PREVIEW=$(command -v batcat || command -v bat)
-VIMSCRIPT="$(dirname "$(realpath "$0")")/claude-edits.vim"
-
-# palette shared with claude-projects (see the design README)
-TXT=$'\e[38;2;214;217;223m' DIM=$'\e[38;2;139;147;163m'
-GRN=$'\e[38;2;140;201;143m' RED=$'\e[38;2;239;143;143m'
-BLU=$'\e[38;2;130;170;255m' PRP=$'\e[38;2;195;166;255m'
-YLW=$'\e[38;2;229;192;123m' BOLD=$'\e[1m' OFF=$'\e[0m'
-KEY=$'\e[48;2;90;98;115m\e[38;2;214;217;223m'
-BADGE=$'\e[48;2;130;170;255m\e[38;2;27;29;35m\e[1m'
+VIMSCRIPT="$HERE/claude-edits.vim"
+BADGE="$BG_BLU"
 
 # Snapshot directory of <path> in <session> (may not exist).
 snapshot_dir() {
   echo "$SNAPSHOTS/${1:-unknown}/$(printf '%s' "$2" | sha1sum | cut -c1-40)"
 }
 
-# Print the "before" file of <path> in <session> ("/dev/null" if Claude
-# created it), or nothing if no snapshot exists.
-before_in() {
-  local dir; dir=$(snapshot_dir "$1" "$2")
-  [ -d "$dir" ] || return
-  if [ -e "$dir/new" ]; then echo /dev/null; return; fi
-  ls "$dir"/*.orig 2>/dev/null | head -1
-}
-
-# Same, for the most recent session that touched <path>.
-before_of() {
-  local session
-  session=$(awk -F'\t' -v p="$1" '$3 == p { s = $2 } END { print s }' "$LOG")
-  before_in "$session" "$1"
-}
-
-ago() {
-  local age=$(( $(date +%s) - $1 ))
-  if   (( age < 3600 ));  then echo "$(( age / 60 ))m"
-  elif (( age < 86400 )); then echo "$(( age / 3600 ))h"
-  else                         echo "$(( age / 86400 ))d"; fi
-}
-
-# Same, in words, for headers.
-ago_words() {
-  local age=$(( $(date +%s) - $1 ))
-  if   (( age < 60 ));    then echo "à l'instant"
-  elif (( age < 3600 ));  then echo "il y a $(( age / 60 )) min"
-  elif (( age < 86400 )); then echo "il y a $(( age / 3600 )) h"
-  else                         echo "il y a $(( age / 86400 )) j"; fi
+# Print the "before" file kept in snapshot <dir> ("/dev/null" if Claude created
+# the file), or nothing if there is no snapshot.
+before_at() {
+  [ -d "$1" ] || return
+  if [ -e "$1/new" ]; then echo /dev/null; return; fi
+  local origs=("$1"/*.orig)
+  [ -e "${origs[0]}" ] && echo "${origs[0]}"
 }
 
 # Path shown to the user: relative to <base> when given, else to $GITHUB or ~.
@@ -88,41 +58,41 @@ render_path() {
   else                       echo "${BOLD}${p}${OFF}"; fi
 }
 
-# "+A -D" of <before> -> <after>, as two numbers.
+# "+A -D" of <before> -> <after>, as two numbers; "0 0" when they match.
 numstat() {
   diff "$1" "$2" | awk '/^>/ { a++ } /^</ { d++ } END { print a + 0, d + 0 }'
 }
 
 # The fzf input, one line per file under a header line per session:
 #   <header>\t<row>\t<path>\t<epoch>\t<session>
-# Only <row> is searched (--nth 2), so headers drop out as soon as a query is typed.
+# Also writes the number of headers to $GROUPS_FILE, for the counter.
 list() {
-  local scope="$1" now; now=$(date +%s)
-  local -a ts sess path syms stats
-  local t s f before a d sym stat
+  local scope="$1"
+  local -a ts sess path syms adds dels
+  local t s f before a d sym
 
   # newest first; files grouped by the session that touched them last, groups
   # ordered by their latest edit
   while IFS=$'\t' read -r t s f; do
     [[ -f "$f" && ( -z "$scope" || "$f" == "$scope"/* ) ]] || continue
-    before=$(before_in "$s" "$f")
+    before=$(before_at "$(snapshot_dir "$s" "$f")")
+    a="" d=""
     if [ -z "$before" ]; then
-      sym="${DIM}?${OFF}" stat="sans diff"
-    elif diff -q "$before" "$f" >/dev/null; then
-      sym="${DIM}↶${OFF}" stat="annulé"
+      sym="${DIM}?${OFF}"
     else
       read -r a d < <(numstat "$before" "$f")
-      if [ "$before" = /dev/null ]; then sym="${GRN}✚${OFF}"; else sym="${YLW}~${OFF}"; fi
-      stat="+$a -$d"
+      if   (( a + d == 0 ));         then sym="${DIM}↶${OFF}"
+      elif [ "$before" = /dev/null ]; then sym="${GRN}✚${OFF}"
+      else                                sym="${YLW}~${OFF}"; fi
     fi
-    ts+=("$t") sess+=("$s") path+=("$f") syms+=("$sym") stats+=("$stat")
+    ts+=("$t") sess+=("$s") path+=("$f") syms+=("$sym") adds+=("$a") dels+=("$d")
   done < <(tac "$LOG" | awk -F'\t' '
     !seen[$3]++ { if (!($2 in n)) order[++groups] = $2; i = ++n[$2]; ts[$2, i] = $1; path[$2, i] = $3 }
     END { for (g = 1; g <= groups; g++) for (i = 1; i <= n[order[g]]; i++)
             print ts[order[g], i] "\t" order[g] "\t" path[order[g], i] }')
 
   # path column: whatever the list pane leaves after the mark, stats and age
-  local i width=0 p max=$(( ${LIST_COLS:-70} - 24 ))
+  local i width=0 p max=$(( ${LIST_COLS:-70} - 26 ))
   (( max < 20 )) && max=20
   local -a shorts parts
   for i in "${!path[@]}"; do
@@ -141,9 +111,7 @@ list() {
     (( ${#p} > width )) && width=${#p}
   done
 
-  local group=-1 last="" label plus minus
-  # session headers are counted out of the "6/14" counter (see info_for)
-  [ -n "$GROUPS_FILE" ] && echo "$(printf '%s\n' "${sess[@]}" | uniq | grep -c .)" >"$GROUPS_FILE"
+  local group=-1 last="" label stat plus minus
   for i in "${!path[@]}"; do
     if [ "${sess[i]}" != "$last" ]; then
       last=${sess[i]}; (( group++ ))
@@ -152,21 +120,25 @@ list() {
         1) label="SESSION PRÉCÉDENTE" ;;
         *) label="SESSION" ;;
       esac
-      printf '%s\t\t\t\t\n' "${DIM}${label} · $(ago_words "${ts[i]}")${OFF}"
+      printf '%s\t\t\t\t\n' "${DIM}${label} · $(since "${ts[i]}")${OFF}"
+    fi
+    if [ -z "${adds[i]}" ]; then
+      printf -v stat '%s%11s%s' "$DIM" "sans diff" "$OFF"
+    elif (( adds[i] + dels[i] == 0 )); then
+      printf -v stat '%s%11s%s' "$DIM" "annulé" "$OFF"
+    else
+      minus="-${dels[i]}"; [ "$minus" = -0 ] && minus="·"
+      printf -v stat '%s%5s%s %s%5s%s' "$GRN" "+${adds[i]}" "$OFF" "$RED" "$minus" "$OFF"
     fi
     p=${shorts[i]}
-    if [[ "${stats[i]}" == +* ]]; then
-      read -r plus minus <<<"${stats[i]}"
-      [ "$minus" = -0 ] && minus="·"
-      stat="${GRN}$(printf '%5s' "$plus")${OFF} ${RED}$(printf '%5s' "$minus")${OFF}"
-    else
-      stat="${DIM}$(printf '%11s' "${stats[i]}")${OFF}"
-    fi
-    printf '\t%s %s%*s  %s  %s\t%s\t%s\t%s\n' \
+    printf '\t%s %s%*s  %s  %s%7s%s\t%s\t%s\t%s\n' \
       "${syms[i]}" "$(render_path "$p")" $(( width - ${#p} )) "" \
-      "$stat" "${DIM}$(printf '%3s' "$(ago "${ts[i]}")")${OFF}" \
+      "$stat" "$DIM" "$(ago "${ts[i]}")" "$OFF" \
       "${path[i]}" "${ts[i]}" "${sess[i]}"
   done
+
+  # session headers are counted out of the "6/14" counter (see info_for)
+  [ -n "$GROUPS_FILE" ] && echo $(( group + 1 )) >"$GROUPS_FILE"
 }
 
 # Right side of the input line: scope badge, ctrl-g hint, file count.
@@ -189,11 +161,11 @@ show_file() {
   else awk -v d="$DIM" -v o="$OFF" '{ printf "%s%4d%s  %s\n", d, NR, o, $0 }' "$1"; fi
 }
 
-# A unified diff of <before> -> <after>, drawn for the preview: old and new line
-# numbers, full-width background on added/removed lines, and the enclosing
-# top-level line (function, class, import...) after each @@.
+# A unified diff (on stdin) drawn for the preview: old and new line numbers,
+# full-width background on added/removed lines, and the enclosing top-level
+# line (function, class, import...) after each @@.
 show_diff() {
-  diff -u -F '^[[:alpha:]_$@]' "$1" "$2" | expand -t4 \
+  expand -t4 \
     | awk -v W="${FZF_PREVIEW_COLUMNS:-80}" -v off="$OFF" -v dim="$DIM" -v prp="$PRP" \
           -v add=$'\e[48;2;35;51;40m\e[38;2;140;201;143m' -v del=$'\e[48;2;58;38;41m\e[38;2;239;143;143m' '
       function fill(s,   n) { n = W - length(s); return n > 0 ? s sprintf("%" n "s", "") : s }
@@ -212,33 +184,40 @@ show_diff() {
 }
 
 preview() {
-  local path="$1" ts="$2" session="$3" mode="$4" before dir a d edits
+  local path="$1" ts="$2" session="$3" mode="$4"
   [ -n "$path" ] || exit 0
 
   # path on the left, tabs on the right, clear of fzf's scroll counter
   local p; p=$(short_path "$path")
   printf '%s%*s%s\n' "$(render_path "$p")" \
     $(( ${FZF_PREVIEW_COLUMNS:-80} - ${#p} - 14 - 10 )) "" "$(tabs "$mode")"
-  before=$(before_in "$session" "$path")
+
+  # one diff for the header's counts, the reverted check and the view
+  local dir before u="" a d hunks
   dir=$(snapshot_dir "$session" "$path")
-  edits=$(ls "$dir"/*.orig 2>/dev/null | wc -l)
-  (( edits > 1 )) && edits="$edits éditions" || edits="$edits édition"
+  before=$(before_at "$dir")
+  [ -n "$before" ] && u=$(diff -u -F '^[[:alpha:]_$@]' "$before" "$path")
+  read -r a d hunks < <(awk 'NR > 2 && /^\+/ { a++ } NR > 2 && /^-/ { d++ } /^@@/ { h++ }
+                            END { print a + 0, d + 0, h + 0 }' <<<"$u")
+  local origs=("$dir"/*.orig) edits
+  [ -e "${origs[0]}" ] || origs=()
+  edits="${#origs[@]} édition$( (( ${#origs[@]} > 1 )) && echo s)"
+
+  local edited="édité par Claude $(since "$ts")"
   if [ -z "$before" ]; then
-    echo "${DIM}édité par Claude $(ago_words "$ts") · sans snapshot : édité avant l'enregistrement des diffs${OFF}"
-  elif diff -q "$before" "$path" >/dev/null; then
-    echo "${DIM}édité par Claude $(ago_words "$ts") · annulé depuis : plus aucun changement · $edits${OFF}"
+    echo "${DIM}$edited · sans snapshot : édité avant l'enregistrement des diffs${OFF}"
+  elif [ -z "$u" ]; then
+    echo "${DIM}$edited · annulé depuis : plus aucun changement · $edits${OFF}"
   else
-    read -r a d < <(numstat "$before" "$path")
-    local hunks; hunks=$(diff -u "$before" "$path" | grep -c '^@@')
-    local what="$edits"; [ "$before" = /dev/null ] && what="créé par Claude"
-    echo "${DIM}édité par Claude $(ago_words "$ts") · ${GRN}+$a ${RED}-$d${DIM} · $hunks bloc$( (( hunks > 1 )) && echo s) · $what${OFF}"
+    [ "$before" = /dev/null ] && edits="créé par Claude"
+    echo "${DIM}$edited · ${GRN}+$a ${RED}-$d${DIM} · $hunks bloc$( (( hunks > 1 )) && echo s) · $edits${OFF}"
   fi
   echo "${DIM}$(printf '─%.0s' $(seq "${FZF_PREVIEW_COLUMNS:-80}"))${OFF}"
 
   if [ "$mode" = file ] || [ -z "$before" ] || [ "$before" = /dev/null ]; then
     show_file "$path"
-  elif ! diff -q "$before" "$path" >/dev/null; then
-    show_diff "$before" "$path"
+  elif [ -n "$u" ]; then
+    show_diff <<<"$u"
   fi
 }
 
@@ -264,22 +243,15 @@ case "$1" in
     if [ -s "$2" ]; then : >"$2"; elif [ -n "$3" ]; then echo "$3" >"$2"; fi
     exit 0
     ;;
-  --vimdiff)
-    before=$(before_of "$2")
+  --vimdiff) # <path> <session>
+    before=$(before_at "$(snapshot_dir "$3" "$2")")
     [ -n "$before" ] || exit 0
     open_in_vim "$2" "$before" -c ClaudeDiff
     exit 0
     ;;
 esac
 
-fzf_version=$(fzf --version | cut -d' ' -f1)
-IFS=. read -r major minor _ <<<"$fzf_version"
-if (( major == 0 && minor < 66 )); then
-  echo "claude-edits a besoin de fzf >= 0.66 (installé : $fzf_version)."
-  echo "Lance le playbook dotfiles : ansible-playbook -i inventory.ini playbook.yml --tags fzf -K"
-  read -rsn1
-  exit 1
-fi
+require_fzf
 
 if [ ! -s "$LOG" ]; then
   echo "Aucune édition enregistrée ($LOG)."
@@ -308,31 +280,17 @@ footer="${KEY} ⏎ ${OFF} vim   ${KEY} ^D ${OFF} vimdiff   ${KEY} ^F ${OFF} diff
 ${KEY} ^G ${OFF} dépôt/tous   ${KEY} ^Y ${OFF} copier   ${KEY} ^/ ${OFF} aperçu
 ${GRN}✚${OFF} créé  ${YLW}~${OFF} modifié  ${DIM}↶${OFF} annulé  ${DIM}?${OFF} sans diff"
 
-# Session headers have no path ({3}): the cursor steps over them, enter
-# ignores them, and they drop out of the list as soon as a query is typed.
-skip_header='[ -n {3} ] || echo down'
-file=$("$self" --list "$SCOPE" \
-  | fzf --ansi --layout=reverse --delimiter '\t' --with-nth 1,2 --nth 2 --tabstop 1 \
-        --border=rounded --border-label " ✎ fichiers modifiés par claude " --border-label-pos=3 \
-        --input-border=line --footer-border=line --footer "$footer" \
-        --prompt '❯ ' --ghost 'chercher un fichier' \
-        --info=inline-right --info-command "'$self' --info '$SCOPE'" --no-separator \
-        --pointer '▌' --gutter ' ' --highlight-line --no-scrollbar \
-        --color 'bg+:#2c313c,fg+:#d6d9df,pointer:#82aaff,hl:#82aaff,hl+:#82aaff' \
-        --color 'border:#5a6273,label:#82aaff:bold,prompt:#82aaff,info:#8b93a3,ghost:#5a6273' \
-        --color 'input-border:#5a6273,footer-border:#5a6273,preview-border:#5a6273' \
+popup_fzf_opts '#82aaff' "✎ fichiers modifiés par claude" 'chercher un fichier'
+sel=$("$self" --list "$SCOPE" \
+  | fzf "${POPUP_FZF[@]}" --footer "$footer" \
+        --info-command "'$self' --info '$SCOPE'" \
         --preview-window "right,$PREVIEW_PCT%,border-left" \
         --preview "'$self' --preview {3} {4} {5} '$MODE'" \
-        --bind 'change:first' --bind "result:transform($skip_header)" \
-        --bind "down:down+transform($skip_header)" \
-        --bind 'up:up+transform([ -n {3} ] || { [ $FZF_POS -le 1 ] && echo down || echo up; })' \
-        --bind 'enter:transform([ -n {3} ] && echo accept)' \
         --bind "ctrl-f:execute-silent('$self' --toggle '$MODE')+refresh-preview" \
-        --bind "ctrl-d:execute-silent([ -n {3} ] && '$self' --vimdiff {3})+abort" \
+        --bind "ctrl-d:execute-silent([ -n {3} ] && '$self' --vimdiff {3} {5})+abort" \
         --bind "ctrl-g:execute-silent('$self' --scope '$SCOPE' '$repo')+reload('$self' --list '$SCOPE')" \
-        --bind "ctrl-y:execute-silent([ -n {3} ] && tmux set-buffer -w -- {3} && tmux display-message 'chemin copié : '{3})" \
-        --bind 'ctrl-/:toggle-preview' \
-  | cut -f3)
+        --bind "ctrl-y:execute-silent([ -n {3} ] && tmux set-buffer -w -- {3} && tmux display-message 'chemin copié : '{3})")
 
-[ -n "$file" ] || exit 0
-open_in_vim "$file" "$(before_of "$file")"
+[ -n "$sel" ] || exit 0
+file=$(cut -f3 <<<"$sel") session=$(cut -f5 <<<"$sel")
+open_in_vim "$file" "$(before_at "$(snapshot_dir "$session" "$file")")"
