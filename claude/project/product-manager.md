@@ -41,6 +41,7 @@ Read-only.
    - the phase, and whether its exit criterion is met
    - **the one goal** for this session: *Now* from the roadmap, unless something blocks it (unmerged work, an item in *Waiting on* that has been resolved, a bypassed pipeline) — then that comes first
    - where *Now* is in the feature loop: if it is a feature with no brief in `docs/features/`, the goal is the brief (`/feature-brief`), not the code; if the brief is not reviewed, the goal is the review
+   - **which loop**: full, or light for a change inside an existing feature (the four questions of the framework README, « The light loop »); say which question decided it
    - what is explicitly **out of scope** today (one line per tempting side topic)
    - drift alerts: branches ahead of `main` for more than a few days, a `CLAUDE.md` over 200 lines, *Waiting on* items older than two weeks
 

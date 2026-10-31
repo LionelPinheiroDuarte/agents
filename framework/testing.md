@@ -48,7 +48,7 @@ RED tests are written by the `test-writer` agent from the feature brief's accept
    - the test is wrong → `test:` commit, and rule 2 applies
    - a new behaviour came up while coding → its own RED commit, then the GREEN
    - a fixture or mock must follow a type change (a new field) → `test:` commit with only that change
-2. **Changing an existing assertion is a change of specification**, so it is the user's decision. Claude says which assertion, the old and new expected value, and why, and waits for an answer.
+2. **Changing an existing assertion is a change of specification**, so it is the user's decision. Claude says which assertion, the old and new expected value, and why, and waits for an answer. A changed matcher or query counts too (a regex narrowed, `includeHiddenElements` added): the commit message never says « no assertion changed » when one did, and names the weakening if there is one.
 3. **Deleting a test file means listing the behaviours it covered**, each one either re-tested elsewhere (where) or dropped (a decision written in the commit message and the session log).
 4. **Raising a timeout, adding `skip`, `only`, `xfail` or a retry** needs a comment saying why in the code, and a roadmap item to remove it.
 
@@ -62,6 +62,10 @@ RED tests are written by the `test-writer` agent from the feature brief's accept
 | End to end | the critical paths on the real target (Maestro, Playwright, a CLI run, an HTTP call to a deployed server), and what can only be seen there (native, visual) | slow, few |
 
 Each state of the brief's acceptance checklist is covered at least at one level, preferably the feature level; the `test-auditor` checks it.
+
+### When the RED tests are wrong
+
+The GREEN step is where a RED test turns out wrong: an interaction outside `act()`, an element the brief hides from accessibility, a negative assertion that also matches legitimate copy. The code cannot fix those, and bending the code to them is worse. Stop, list each one with its cause and the proposed fix, get the user's answer, and commit the fixes as `test(<scope>): fix RED tests (user-approved)` before the GREEN. `check-tdd-commits.sh` then sees a clean GREEN.
 
 ## Mocks
 

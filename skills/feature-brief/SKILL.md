@@ -8,6 +8,10 @@ Feature: `$ARGUMENTS`
 
 Goal: a document that lets someone design every screen of this feature without guessing, then build and test it. The interview finds the cases the user would not have thought of; the document keeps them.
 
+## Full brief or change note
+
+First check the size (framework README, « The light loop »). A change inside an existing feature — no new screen, dialog, native dependency or table, nothing irreversible touched in a new way, about ten acceptance rows at most — gets a **change note** instead: a short interview (3–5 questions), then `docs/features/<NN><letter>-<slug>.md` from `~/repos/github/agents/framework/templates/feature-change.md`, with the existing test assertions it changes quoted and approved by the user before any code, and a « Changed by » line in the parent brief. Say which size you chose and why; if the interview finds a new screen or state, switch to the full brief.
+
 ## How to interview
 
 - One question at a time, each with your recommended answer and why (as in `grill-me`). Offer 2–4 options when the choice is open.

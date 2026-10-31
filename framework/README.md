@@ -22,17 +22,37 @@ Rules:
 
 - **No long-lived `dev` branch ahead of `main`.** Feature branches merge to `main` when they are done. If an integration branch exists, it is never more than a few days ahead.
 - **If the pipeline is bypassed, fix the pipeline.** A manual workaround becomes a roadmap item, not a paragraph of docs.
-- **The feedback loop on the real target is part of phase 2** (phone, browsers, terminal, deployed server). If Claude can't see the result (no device, no screenshot, no logs), fix that before building features on top.
+- **The feedback loop on the real target is part of phase 2** (phone, browsers, terminal, deployed server). If Claude can't see the result (no device, no screenshot, no logs), fix that before building features on top. The loop also sets up states and restores them: a data state (back up the store, edit a copy, put it in place, restore it after), a system setting (text size, language). The project's `CLAUDE.md` holds the recipe; a script once it recurs.
 
 ### The feature loop (phase 4)
 
 Each feature goes through the same loop. The brief is written before any code, so error states, motion and UX choices are designed, not discovered while coding.
 
-1. **Brief** — `/feature-brief <idea>`: interview, then `docs/features/<NN>-<slug>.md` (flows, states of every screen, motion, UX decisions, accessibility, design prompt, acceptance checklist)
+1. **Brief** — `/feature-brief <idea>`: interview, then `docs/features/<NN>-<slug>.md` (flows, states of every screen, motion, UX decisions, accessibility, design prompt, acceptance checklist). The brief's copy is asserted literally by the tests: write it with the app's typography (apostrophes, quotes, spaces) and check negative assertions against it (a « no Restore button » test must not match a benefit that says « to restore »).
 2. **Review** — `ux-reviewer` agent on the brief; answer the blocking questions, update the brief
-3. **Design** — paste the brief's design prompt into Claude Design with the design system; store the mock-ups (or their link) next to the brief, status `designed`
-4. **Build** — one branch, TDD per [`testing.md`](./testing.md): the `test-writer` agent writes the RED tests from the acceptance checklist, the session writes the GREEN without touching them, then REFACTOR; before the merge to `main`, `scripts/check-tdd-commits.sh` and the `test-auditor` agent
-5. **Verify** — the brief's acceptance checklist on the real target (phone, browsers, terminal…), status `built`
+3. **Design** — paste the brief's design prompt into Claude Design with the design system; store the mock-ups (or their link) next to the brief, status `designed`. Skipped when the design system's mock-ups already cover the screens: the brief says so and settles the deltas in text
+4. **Build** — one branch, TDD per [`testing.md`](./testing.md): the `test-writer` agent writes the RED tests from the acceptance checklist, the session writes the GREEN without touching them, then REFACTOR (`/simplify` on the branch diff); before the merge to `main`, `scripts/check-tdd-commits.sh` and the `test-auditor` agent
+5. **Verify** — the brief's acceptance checklist on the real target (phone, browsers, terminal…), status `built`. Include what the test runner cannot see: keyboard open, large text, navigation bar variants, slow network. Claude drives it; the user judges only what needs a hand or an eye (gesture feel, sound)
+
+### The light loop: a change to an existing feature
+
+The full loop costs a dozen agent runs and several user decisions. For a change that stays inside an existing feature, most of that cost buys nothing. The light loop keeps what protects the data and the specification, and drops what designs new screens.
+
+**When**: every answer below is « no ». One « yes » → the full loop. Unsure → the full loop.
+
+- Does it add a screen, a route, or a dialog the design system does not have?
+- Does it add a native dependency or a new table (a column with a default is fine)?
+- Does it touch something irreversible and silent (file deletion, import, purchase, quota) in a new way?
+- Does it need more than about ten acceptance rows?
+
+**Steps**
+
+1. **Change note** — `docs/features/<NN><letter>-<slug>.md` from [`templates/feature-change.md`](./templates/feature-change.md), written with the user in a short interview (3–5 questions): what changes, the states that change (only those), **the existing assertions it changes, quoted, approved by the user before any code**, the acceptance rows. The parent brief gets a « Changed by » line.
+2. **Build** — same TDD as the full loop: `test-writer` from the note's rows (RED), GREEN, REFACTOR only if the diff calls for it; the approved assertion changes go in their own `test:` commit before the GREEN.
+3. **Check** — `check-tdd-commits.sh` always; the `test-auditor` only when an assertion changed or a test was deleted.
+4. **Verify** — the note's rows on the real target, nothing else.
+
+Dropped: `ux-reviewer` (unless the note changes a flow), the design pass, the full acceptance pass. If the interview finds a new screen or state, stop and switch to the full loop: the note becomes the start of a brief.
 
 A design system shared by all features (`docs/design-system.md` or tokens) is set up once, before the first feature: briefs reuse its patterns instead of inventing new ones.
 
@@ -79,4 +99,4 @@ Rules:
 
 ## Templates
 
-[`templates/`](./templates/) holds the starting files for phase 0 (`CLAUDE.md`, `roadmap.md`, `sessions.md`) and the feature brief (`feature-brief.md`).
+[`templates/`](./templates/) holds the starting files for phase 0 (`CLAUDE.md`, `roadmap.md`, `sessions.md`), the feature brief (`feature-brief.md`) and the change note of the light loop (`feature-change.md`).
