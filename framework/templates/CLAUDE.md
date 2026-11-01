@@ -78,7 +78,7 @@ Full rules: `~/repos/github/agents/framework/testing.md`.
 - RED (tests only) → GREEN (**no test file**) → REFACTOR (assertions unchanged).
 - Changing an assertion = asking the user. Deleting a test = listing the behaviours it covered.
 - `skip` / `only` / raised timeout: a comment with the reason + a roadmap item.
-- Test command: `<cmd>` · on the real target: `<Maestro / Playwright / manual checklist>`
+- Test command: `<cmd>` · on the real target: `<end-to-end command running every flow (Maestro / Playwright)>` for the `[e2e]` rows, then the `[manual]` rows
 
 ## Feedback loop
 

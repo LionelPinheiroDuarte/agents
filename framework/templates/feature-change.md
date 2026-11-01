@@ -36,4 +36,4 @@ Approved by the user before any code (rule 2 of `testing.md`). One line each: th
 ## Acceptance checklist
 
 - [ ] [N.M] <state> — <expected result>
-- [ ] Phone / target: <only what changed>
+- [ ] `[e2e]` / `[manual]` <on the target, only what changed>

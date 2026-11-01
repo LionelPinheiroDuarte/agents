@@ -6,7 +6,7 @@
 set -euo pipefail
 
 range="${1:-origin/main..HEAD}"
-test_re='(\.(test|spec)\.[jt]sx?$|_test\.go$|(^|/)test_[^/]*\.py$|_test\.py$|(^|/)(__tests__|tests?)/)'
+test_re='(\.(test|spec)\.[jt]sx?$|_test\.go$|(^|/)test_[^/]*\.py$|_test\.py$|(^|/)(__tests__|tests?|e2e)/)'
 risky_re='\.(skip|only)\(|\bxit\(|\bxdescribe\(|setTimeout\(|t\.Skip\(|pytest\.mark\.(skip|xfail)|@skip'
 
 errors=0

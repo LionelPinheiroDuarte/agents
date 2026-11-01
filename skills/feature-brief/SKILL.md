@@ -60,6 +60,12 @@ Write `docs/features/<NN>-<slug>.md` in the project (create the folder if needed
 
 The **Design prompt** section must be self-contained: someone pasting it into Claude Design, with the design system files attached, gets every screen and every state of the matrix — not only the happy path.
 
-The **Acceptance checklist** is derived from the states table: one checkable line per state, with its screen reference. It becomes the test list of the feature on its real target (phone, browsers, terminal…).
+The **Acceptance checklist** is derived from the states table: one checkable line per state, with its screen reference. It becomes the test list of the feature. Tag each line by where it is proven:
+
+- no tag — the automated suite can prove it (a rendered screen, a handler, a CLI run): most lines
+- `[e2e]` — only the real target shows it, and a flow can drive it (keyboard over a form, large text, system back, navigation across screens, a native module): the `test-writer` writes its flow at RED
+- `[manual]` — it needs a human hand or eye (gesture feel, sound, camera framing, a screen reader used daily)
+
+A line that is both (the suite proves the logic, the target proves the layout) is split in two.
 
 Then suggest running the `ux-reviewer` agent on the brief before designing.

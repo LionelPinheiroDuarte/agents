@@ -32,7 +32,7 @@ Each feature goes through the same loop. The brief is written before any code, s
 2. **Review** — `ux-reviewer` agent on the brief; answer the blocking questions, update the brief
 3. **Design** — paste the brief's design prompt into Claude Design with the design system; store the mock-ups (or their link) next to the brief, status `designed`. Skipped when the design system's mock-ups already cover the screens: the brief says so and settles the deltas in text
 4. **Build** — one branch, TDD per [`testing.md`](./testing.md): the `test-writer` agent writes the RED tests from the acceptance checklist, the session writes the GREEN without touching them, then REFACTOR (`/simplify` on the branch diff); before the merge to `main`, `scripts/check-tdd-commits.sh` and the `test-auditor` agent
-5. **Verify** — the brief's acceptance checklist on the real target (phone, browsers, terminal…), status `built`. Include what the test runner cannot see: keyboard open, large text, navigation bar variants, slow network. Claude drives it; the user judges only what needs a hand or an eye (gesture feel, sound)
+5. **Verify** — on the real target (phone, browsers, terminal…), status `built`: the project's end-to-end command runs **every** flow (the new feature's `[e2e]` rows, and the earlier features as a regression check), then Claude walks the `[manual]` rows. The flows cover what the test runner cannot see: keyboard open, large text, navigation bar variants, slow network; the user judges only what needs a hand or an eye (gesture feel, sound). A flow is checked once to fail when its row breaks (undo the fix, run it, restore)
 
 ### The light loop: a change to an existing feature
 

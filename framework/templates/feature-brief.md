@@ -51,5 +51,8 @@ Voice: <formal / informal address, tone of errors>
 
 ## Acceptance checklist
 
+Tags: none = automated suite · `[e2e]` = a flow on the real target · `[manual]` = needs a hand or an eye.
+
 - [ ] [N.1] <state> — <expected result>
-- [ ] …
+- [ ] [N.2] `[e2e]` <state only the target shows> — <expected result>
+- [ ] [N.3] `[manual]` <state that needs a hand or an eye> — <expected result>

@@ -22,7 +22,7 @@ Read `~/repos/github/agents/framework/testing.md` first. The branch is given in 
 4. **Escape hatches.** New `skip`, `only`, `xit`, `xfail`, retries, raised timeouts: each needs a comment with a reason (rule 4).
 5. **Mocks.** New or changed mocks: do they mock the code under test or a close collaborator instead of a boundary? Do they drop the real types or error classes? Is a hand-written mock duplicating a shared one?
 6. **Coupling to the implementation.** New or changed tests, checked against "What a test targets" in `testing.md`: assertions on internal state shapes or orderings the user can't see, elements selected by decorative content (emoji, icon, styling), tests targeting an intermediate layer (internal hook, store, private helper) that holds no dense logic. For each, ask: would it survive a refactoring that changes no behaviour? If not, say at which boundary it should test instead.
-7. **Coverage of the brief.** If the branch implements a brief in `docs/features/`, map each acceptance-checklist row to a test. Rows with no test and no "manual / end to end" note are findings.
+7. **Coverage of the brief.** If the branch implements a brief in `docs/features/`, map each acceptance-checklist row to a test. An `[e2e]` row needs a flow that asserts it; a `[manual]` row needs nothing. Untagged rows with no test, and `[e2e]` rows with no flow, are findings.
 8. **Run the suite** with the project's test command, once, and report the result.
 
 ## Report

@@ -59,7 +59,7 @@ RED tests are written by the `test-writer` agent from the feature brief's accept
 | Feature | a behaviour through the public boundary, with real internals and mocked boundaries: a rendered screen with its hooks and store, an HTTP handler through its router with an in-memory DB, a CLI command | **the bulk** — one or more per acceptance-checklist row |
 | Dense logic | pure functions with many cases: parsers, normalisation, scheduling, validation rules — as tables of cases | where the logic is dense, not for every function |
 | Integration | what the feature level mocks and must still be proven: migrations on a real database, a real third-party call in a sandbox | a few |
-| End to end | the critical paths on the real target (Maestro, Playwright, a CLI run, an HTTP call to a deployed server), and what can only be seen there (native, visual) | slow, few |
+| End to end | the critical paths on the real target (Maestro, Playwright, a CLI run, an HTTP call to a deployed server), and what can only be seen there (native, visual): the brief's `[e2e]` rows, written at RED with the other tests | slow, few |
 
 Each state of the brief's acceptance checklist is covered at least at one level, preferably the feature level; the `test-auditor` checks it.
 
