@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One screen to start a session: git state, branches ahead of the default branch,
-# recent CI runs, the roadmap's "Now". Read-only.
+# recent CI runs, the roadmap's "Now" section and the last session of docs/sessions.md. Read-only.
 # Usage: proj-status [--no-ci]
 #
 # An executable `.proj-status` at the repo root is run at the end, for what only
@@ -50,10 +50,18 @@ if [ "$ci" -eq 1 ] && command -v gh >/dev/null && git remote get-url origin 2>/d
 fi
 
 if [ -f docs/roadmap.md ]; then
-  now=$(awk '/^## Now/{f=1;next} /^## /{f=0} f && NF {print; exit}' docs/roadmap.md)
+  # The whole "Now" section, so a session can start without reading the roadmap.
+  now=$(awk '/^## Now/{f=1;next} /^## /{f=0} f && NF' docs/roadmap.md)
   waiting=$(awk '/^## Waiting on/{f=1;next} /^## /{f=0} f && /^- /' docs/roadmap.md | wc -l)
-  [ -n "$now" ] && echo "now: $now"
+  [ -n "$now" ] && { echo "now:"; echo "$now" | sed 's/^/  /'; }
   [ "$waiting" -gt 0 ] && echo "waiting on: $waiting item(s) (docs/roadmap.md)"
+fi
+
+# The newest section of sessions.md (sections are appended, so the last one): what was left
+# last time, without reading the whole log.
+if [ -f docs/sessions.md ]; then
+  last=$(awk '/^## /{buf=""} /^## /,0 {buf=buf $0 "\n"} END{printf "%s", buf}' docs/sessions.md | sed '/^---$/d;/^$/d')
+  [ -n "$last" ] && { echo "last session:"; echo "$last" | sed 's/^/  /'; }
 fi
 
 if [ -x .proj-status ]; then

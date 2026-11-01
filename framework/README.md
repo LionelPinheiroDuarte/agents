@@ -86,7 +86,7 @@ Generic scripts, in [`scripts/`](./scripts/), linked into `~/.local/bin`:
 
 | Script | What it does |
 |---|---|
-| `proj-status` | One screen to start a session: git state, branches not merged, recent CI runs, the roadmap's *Now*. A project adds its own lines with an executable `.proj-status` (build quota, deploy state…) |
+| `proj-status` | One screen to start a session: git state, branches not merged, recent CI runs, the roadmap's *Now* section and the last section of `sessions.md`, so the session starts without reading either file. A project adds its own lines with an executable `.proj-status` (build quota, deploy state…) |
 | `proj-check [--related]` | Types, lint, tests for the detected stack (Node, Go, Python, Terraform, shell), **silent when they pass**: one summary line, or the tail of each failing step. `--related` runs only the tests of changed files (TDD loop). A `.proj-check` file replaces detection |
 | `claude-usage report [--project .]` | Ranks the command combinations Claude keeps running, per project and across projects, from a persistent history (`collect` copies transcripts before Claude Code deletes them after 30 days) |
 | `check-tdd-commits.sh` | The TDD rules on a range of commits (see [`testing.md`](./testing.md)) |
