@@ -42,6 +42,8 @@ A bug is expensive when it is both **irreversible** (persisted data lost or corr
 
 RED tests are written by the `test-writer` agent from the feature brief's acceptance checklist, so they describe the behaviour without knowing the implementation. They must fail for the right reason: a failing assertion or a missing function, not a syntax error or a broken import.
 
+**One slice at a time.** A brief with several screens is built in slices (a screen or a group of screens): RED of slice 1, its GREEN, then RED of slice 2… not one RED of the whole brief. The `test-writer` guesses less about what it cannot see: it reads the screens already built and the brief's **Contract** (routes, `testID`s, accessibility names fixed before the first RED), and a wrong guess shows on the first slice, not in twenty tests at once. (physiqtracker brief 04: two whole-brief RED passes, then 22 test defects found at GREEN, half of them in the test setup.)
+
 ## The four rules
 
 1. **A GREEN commit touches no test file.** When the code seems to need a test change, stop and commit it separately first, saying why:
@@ -56,12 +58,16 @@ RED tests are written by the `test-writer` agent from the feature brief's accept
 
 | Level | Covers | Share of the suite |
 |---|---|---|
-| Feature | a behaviour through the public boundary, with real internals and mocked boundaries: a rendered screen with its hooks and store, an HTTP handler through its router with an in-memory DB, a CLI command | **the bulk** — one or more per acceptance-checklist row |
+| Feature | a behaviour through the public boundary, with real internals and mocked boundaries: a rendered screen with its hooks and store, an HTTP handler through its router with an in-memory DB, a CLI command | **the bulk** — one, at most two, per acceptance-checklist row |
 | Dense logic | pure functions with many cases: parsers, normalisation, scheduling, validation rules — as tables of cases | where the logic is dense, not for every function |
 | Integration | what the feature level mocks and must still be proven: migrations on a real database, a real third-party call in a sandbox | a few |
-| End to end | the critical paths on the real target (Maestro, Playwright, a CLI run, an HTTP call to a deployed server), and what can only be seen there (native, visual): the brief's `[e2e]` rows, written at RED with the other tests | slow, few |
+| End to end | the critical paths on the real target (Maestro, Playwright, a CLI run, an HTTP call to a deployed server), and what can only be seen there (native, visual): the brief's `[e2e]` rows, written at RED with the other tests | slow, few: short flows, each from its own setup |
 
 Each state of the brief's acceptance checklist is covered at least at one level, preferably the feature level; the `test-auditor` checks it.
+
+**Copy is asserted once per screen.** One test per screen and language checks its exact strings (the brief's copy table); the behaviour tests find elements by role, accessibility name or `testID` and assert outcomes, not wording. A copy change then touches one test, not every test that happens to read the label.
+
+**End-to-end flows stay short.** One flow per screen group, each starting from an empty app and its own setup, so a failure reruns minutes, not the whole path. A flow that fails is diagnosed on the screen as it was (the UI tree, the logs, one step replayed), never by rerunning the flow from the start to look again. Variant passes (large text, another bar) run only for the flows whose layout they can break.
 
 ### When the RED tests are wrong
 
@@ -78,6 +84,8 @@ The GREEN step is where a RED test turns out wrong: an interaction outside `act(
 A test that fails now and then is a bug, either in the test or in the code. Find the cause before touching the timeout; if the timeout is the answer, rule 4 applies.
 
 ## Checks
+
+- Reading a failing run: the names and messages of the failing tests, not whole test files.
 
 - `framework/scripts/check-tdd-commits.sh [range]` fails on a GREEN commit that touches a test file and warns on deleted test files, `skip`/`only` and raised timeouts. Run it before a merge, or in CI on pull requests.
 - The `test-auditor` agent reviews the test history of a branch before it is merged.

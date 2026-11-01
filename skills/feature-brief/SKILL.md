@@ -58,6 +58,8 @@ Pick the checks that fit the target. Visual interfaces: contrast in every theme,
 
 Write `docs/features/<NN>-<slug>.md` in the project (create the folder if needed; `NN` is the next free number), from `~/repos/github/agents/framework/templates/feature-brief.md`. Write it in the language of the project's docs; UI copy in the app's language.
 
+The **Contract** section fixes what the tests rely on before any test exists: routes, the few `testID`s a role or label cannot replace, accessibility names of icon-only controls, and the build slices (screens built and tested together). The `test-writer` uses it instead of guessing.
+
 The **Design prompt** section must be self-contained: someone pasting it into Claude Design, with the design system files attached, gets every screen and every state of the matrix — not only the happy path.
 
 The **Acceptance checklist** is derived from the states table: one checkable line per state, with its screen reference. It becomes the test list of the feature. Tag each line by where it is proven:

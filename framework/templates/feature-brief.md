@@ -49,6 +49,16 @@ Voice: <formal / informal address, tone of errors>
 
 > <Self-contained prompt for Claude Design: the feature in two sentences, the design system to use, then every screen [N.M] with each of its states from the table above, the motion to show, and the variants the target needs (themes, screen sizes).>
 
+## Contract
+
+What the tests and flows rely on, fixed before the first RED so the `test-writer` does not guess: routes and their params, `testID`s (only where no role or label fits: swipeable rows, fields for end-to-end flows), accessibility names of icon-only controls, the slices of the build (which screens go together).
+
+| What | Value |
+|---|---|
+| Route of [N.1] | <…> |
+| `testID` | <element> → `<id>` |
+| Slices | 1: [N.1]–[N.2] · 2: […] |
+
 ## Acceptance checklist
 
 Tags: none = automated suite · `[e2e]` = a flow on the real target · `[manual]` = needs a hand or an eye.
