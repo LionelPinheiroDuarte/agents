@@ -17,6 +17,7 @@ First check the size (framework README, « The light loop »). A change inside a
 - One question at a time, each with your recommended answer and why (as in `grill-me`). Offer 2–4 options when the choice is open.
 - Before asking, look for the answer in the repo: existing screens, components, error handling, design tokens, `CLAUDE.md`, `docs/design-system.md`, earlier briefs in `docs/features/`. Reuse an existing pattern rather than inventing a new one, and say which.
 - Accept "skip" or "you decide": record your choice as a decision with its reason.
+- Mark every answer the user gives « (user, <date>) » in the brief, in the decisions table or on the line it decides: the review treats those as settled.
 - Group trivial questions; spend the questions on the cases that change the design.
 
 ## The interview, in order
@@ -71,3 +72,12 @@ The **Acceptance checklist** is derived from the states table: one checkable lin
 A line that is both (the suite proves the logic, the target proves the layout) is split in two.
 
 Then suggest running the `ux-reviewer` agent on the brief before designing.
+
+## After the review
+
+Do not relay the reviewer's report as it is: the user should only answer what is still open.
+
+1. Drop every question the brief already decides (a « (user, …) » line or a decisions row), unless the reviewer shows a contradiction or an undefined case; then ask about that gap only.
+2. Settle yourself what the repo answers (« Settled from the repo », an earlier brief's rule, the code), write it into the brief with its source, and list these in one short paragraph for the user.
+3. Ask the rest one at a time, each with your recommendation, as in the interview.
+4. Fix the brief's own slips (contradictions, a missing checklist line, a wrong example) without asking, and say so.

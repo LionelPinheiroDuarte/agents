@@ -16,6 +16,12 @@ Input: the path of the brief. Also read, when they exist in the same repo: `CLAU
 
 Don't edit anything.
 
+## Decided points are not reopened
+
+The brief records what the user already chose: rows of the decisions table and lines marked « (user, <date>) ». Never ask them again. Raise one only when the brief contradicts it elsewhere, or when a case it implies is left undefined; then quote the decided line and ask about the gap, not the choice.
+
+Before writing a question, look for its answer: elsewhere in the brief (states table, data rules, copy), in the parent or earlier briefs it reuses (« as [04.6] », « as 03 »), in `CLAUDE.md` and in the code. An answer found there is not a question: list it under « Settled from the repo » with its source, so the brief can state it explicitly.
+
 ## What to check
 
 1. **States coverage.** For each screen [N.M], check the families: data (empty / one / many / long text), loading (short / long), network (offline / service down / timeout), input validation, not found, destructive actions, interruption and resume, storage or permission failures, success feedback, first use. List the missing ones that apply — skip the ones that obviously don't.
@@ -38,6 +44,9 @@ Verdict: ready for design | needs answers
 
 ### Worth deciding
 - …
+
+### Settled from the repo (no question; the brief should say it)
+- [N.M] <point> — <source: brief line, earlier brief row, file:line>
 
 ### Consistency with the app
 - <pattern in the brief> vs <existing pattern, file:line>
