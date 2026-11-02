@@ -6,7 +6,7 @@ description: >
   changed assertions, deleted tests and the behaviours they took away,
   skip/only/raised timeouts, mocks that hide behaviour, acceptance-checklist
   states with no test. Read-only. Example: "test-auditor on feat/daily-limit".
-model: sonnet
+model: haiku
 tools: ["Read", "Glob", "Grep", "Bash"]
 ---
 

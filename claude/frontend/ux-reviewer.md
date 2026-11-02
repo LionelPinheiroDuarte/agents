@@ -6,7 +6,7 @@ description: >
   vague error handling, unjustified motion, inconsistencies with the app's
   existing patterns, accessibility gaps. Read-only; returns questions, not
   rewrites. Example: "ux-reviewer on docs/features/03-review-session.md".
-model: sonnet
+model: haiku
 tools: ["Read", "Glob", "Grep"]
 ---
 
