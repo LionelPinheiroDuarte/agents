@@ -121,7 +121,7 @@ current session — so they keep the full context of the work in progress. Each 
 
 ## Project framework
 
-[`framework/`](./framework/README.md) is how I run a project with Claude Code: build order (walking skeleton first), session scope, and one source of truth per kind of documentation. The [`product-manager`](./claude/project/product-manager.md) agent applies it, the [`ux-reviewer`](./claude/frontend/ux-reviewer.md) agent reviews feature briefs, [`test-writer`](./claude/testing/test-writer.md) and [`test-auditor`](./claude/testing/test-auditor.md) apply the [testing rules](./framework/testing.md); [`templates/`](./framework/templates/) holds the phase-0 files and the feature brief; [`scripts/`](./framework/scripts/) holds `proj-status`, `proj-check` (quiet checks for any stack) and `claude-usage` (tracks the commands Claude repeats across projects, to turn them into scripts).
+[`framework/`](./framework/README.md) is how I run a project with Claude Code: build order (walking skeleton first), session scope, and one source of truth per kind of documentation. The [`product-manager`](./claude/project/product-manager.md) agent applies it, the [`ux-reviewer`](./claude/frontend/ux-reviewer.md) agent reviews feature briefs, [`test-writer`](./claude/testing/test-writer.md) and [`test-auditor`](./claude/testing/test-auditor.md) apply the [testing rules](./framework/testing.md); [`templates/`](./framework/templates/) holds the phase-0 files and the feature brief; [`scripts/`](./framework/scripts/) holds `proj-status`, `proj-check` (quiet checks for any stack), `tag-release` (a version tag on every merge to `main`, never a build) and `claude-usage` (tracks the commands Claude repeats across projects, to turn them into scripts).
 
 ## Claude Code Hooks
 

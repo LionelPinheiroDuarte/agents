@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Tags a version on the default branch: checks, version bump commit, annotated tag, push.
+# The tag is a marker: this script never starts a build or a deploy (framework phase 3).
+# Usage: tag-release                      list what changed since the last tag (read-only)
+#        tag-release vX.Y.Z "message"     check, bump, tag and push
+#        tag-release --dry-run vX.Y.Z "message"   the checks only
+#
+# An executable `.tag-release` at the repo root is run with the version (X.Y.Z, no `v`) and
+# writes it where the project keeps it (app.config.js, package.json…); what it changes is
+# committed as `chore(release): vX.Y.Z` before the tag.
+set -euo pipefail
+
+die() {
+  echo "tag-release: $*" >&2
+  exit 1
+}
+warn() { echo "tag-release: warning: $*" >&2; }
+
+self=$(readlink -f "$0")
+root=$(git rev-parse --show-toplevel 2>/dev/null) || die "not a git repository"
+cd "$root"
+
+default=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)
+[ -n "$default" ] || default=main
+
+last=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$default" 2>/dev/null || true)
+
+# What a version is made of, since the last tag (everything before the first one): on the
+# default branch's own history, the merges and the feat/fix/breaking commits (a fast-forward
+# merge leaves no merge commit). Conventional Commits assumed.
+changes() {
+  git log --first-parent --format='  %h %s' "${last:+$last..}$default" |
+    grep -E '^  [0-9a-f]+ (Merge |(feat|fix|perf)(\([^)]*\))?!?:|[a-z]+(\([^)]*\))?!:)' || true
+}
+
+case "${1:-}" in -h | --help)
+  sed -n '2,10p' "$self" | sed 's/^# \{0,1\}//'
+  exit 0
+  ;;
+esac
+
+dry=false
+[ "${1:-}" = "--dry-run" ] && dry=true && shift
+
+if [ $# -eq 0 ]; then
+  echo "last tag: ${last:-none}"
+  out=$(changes)
+  if [ -n "$out" ]; then
+    echo "on $default since ${last:-the start} (merges, feat, fix, breaking):"
+    echo "$out"
+  else
+    echo "no merge, feat or fix on $default since $last"
+  fi
+  exit 0
+fi
+
+[ $# -eq 2 ] || die "usage: tag-release [--dry-run] vX.Y.Z \"message\" (see --help)"
+tag=$1 message=$2
+[[ $tag =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || die "version must look like v1.2.3, got $tag"
+version=${tag#v}
+
+git show-ref -q --verify "refs/tags/$tag" && die "$tag already exists"
+if [ -n "$last" ]; then
+  highest=$(printf '%s\n%s\n' "$last" "$tag" | sort -V | tail -1)
+  [ "$highest" = "$tag" ] || die "$tag is not above the last tag $last"
+fi
+
+[ "$(git branch --show-current)" = "$default" ] || die "not on $default"
+[ -z "$(git status --porcelain)" ] || die "uncommitted changes"
+git fetch -q origin "$default" || die "git fetch failed"
+[ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$default")" ] ||
+  die "$default is not in sync with origin/$default (pull or push first)"
+
+# CI on the commit being tagged: a tag on a red main is a release nobody can rebuild.
+if command -v gh >/dev/null && git remote get-url origin | grep -q github.com; then
+  conclusions=$(gh run list --commit "$(git rev-parse HEAD)" --json conclusion,status \
+    --template '{{range .}}{{if .conclusion}}{{.conclusion}}{{else}}{{.status}}{{end}}{{"\n"}}{{end}}') ||
+    die "could not read CI runs (gh)"
+  [ -n "$conclusions" ] || die "no CI run on HEAD yet"
+  grep -qvx success <<<"$conclusions" && die "CI on HEAD is not all green: $(sort -u <<<"$conclusions" | tr '\n' ' ')"
+else
+  warn "no GitHub CLI or remote: CI state not checked"
+fi
+
+echo "tag-release: $tag on $default ($(git log -1 --format='%h %s')), last tag ${last:-none}"
+if $dry; then
+  echo "tag-release: dry run, checks passed"
+  exit 0
+fi
+
+if [ -x .tag-release ]; then
+  ./.tag-release "$version" || die ".tag-release failed"
+  if [ -n "$(git status --porcelain)" ]; then
+    git commit -qam "chore(release): $tag" || die "version bump commit failed"
+    echo "tag-release: committed the version bump"
+  fi
+fi
+
+git tag -a "$tag" -m "$tag — $message"
+git push -q origin "$default" "$tag" || die "push failed; the tag exists locally: git push origin $default $tag"
+echo "tag-release: pushed $tag (no build started; that is an explicit step)"

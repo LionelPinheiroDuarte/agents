@@ -43,6 +43,15 @@ if [ -n "$default" ]; then
   [ -n "$out" ] && { echo "branches with work not in $default:"; echo "$out"; }
 fi
 
+# Versions not tagged yet (tag-release): a project that tags releases (a « ## Releases » or « ## Versioning » section
+# in CLAUDE.md) is told when merges, feat or fix commits wait on the default branch.
+if [ -n "$default" ] && grep -qE '^## (Releases|Versioning)' CLAUDE.md 2>/dev/null; then
+  last_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$default" 2>/dev/null)
+  pending=$(git log --first-parent --format='%s' "${last_tag:+$last_tag..}$default" |
+    grep -cE '^(Merge |(feat|fix|perf)(\([^)]*\))?!?:|[a-z]+(\([^)]*\))?!:)')
+  [ "$pending" -gt 0 ] && echo "untagged: $pending merge/feat/fix commit(s) on $default since ${last_tag:-the start, no tag yet} (tag-release lists them)"
+fi
+
 if [ "$ci" -eq 1 ] && command -v gh >/dev/null && git remote get-url origin 2>/dev/null | grep -q github.com; then
   runs=$(timeout 10 gh run list --limit 3 --json workflowName,headBranch,status,conclusion,createdAt \
     --template '{{range .}}  {{.workflowName}} on {{.headBranch}}: {{if .conclusion}}{{.conclusion}}{{else}}{{.status}}{{end}} ({{timeago .createdAt}}){{"\n"}}{{end}}' 2>/dev/null)

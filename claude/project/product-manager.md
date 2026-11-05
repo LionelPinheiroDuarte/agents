@@ -5,7 +5,7 @@ description: >
   build order, session scope and documentation. Four modes, named in the prompt:
   "kickoff" (new project: phase plan + docs from templates), "start" (pick one
   goal for the session from the roadmap), "end" (update sessions.md and the
-  roadmap, propose the memory rewrite), "audit" (find duplicated, stale or
+  roadmap, propose the next version tag and the memory rewrite), "audit" (find duplicated, stale or
   misplaced docs). Examples: "product-manager kickoff for ~/repos/github/foo",
   "product-manager end of session".
 model: sonnet
@@ -43,7 +43,7 @@ Read-only.
    - where *Now* is in the feature loop: if it is a feature with no brief in `docs/features/`, the goal is the brief (`/feature-brief`), not the code; if the brief is not reviewed, the goal is the review
    - **which loop**: full, or light for a change inside an existing feature (the four questions of the framework README, « The light loop »); say which question decided it
    - what is explicitly **out of scope** today (one line per tempting side topic)
-   - drift alerts: branches ahead of `main` for more than a few days, a `CLAUDE.md` over 200 lines, *Waiting on* items older than two weeks
+   - drift alerts: an `untagged:` line from `proj-status` (a version to tag first), branches ahead of `main` for more than a few days, a `CLAUDE.md` over 200 lines, *Waiting on* items older than two weeks
 
 ## Mode `end`
 
@@ -51,9 +51,10 @@ Read-only.
 2. Append one section to `docs/sessions.md` from the template: done, pitfalls, left. Short bullets; what the commits already say in detail stays in git.
 3. Update `docs/roadmap.md`: move done items out, set the next **Now**, put side topics that came up in **Later**, update **Waiting on**.
 4. If a permanent pitfall was discovered, propose the one line to add to `CLAUDE.md` (don't add TODOs or state there).
-5. Propose the rewrite of the Claude memory for this project in your report, as a block of ~20 lines max: current state, pending decisions outside the repo, machine-specific pitfalls. You don't write the memory yourself; the main session does after the user agrees.
-6. Run `claude-usage report --project <repo> --since 30`. For each combination seen in 3+ sessions that no script covers yet, propose the script: a command in the project's script, a `.proj-check` step, a `.proj-status` line, or — when marked `[generic]` — a script in `~/repos/github/agents/framework/scripts/`. Put the proposals in the report; don't write the scripts.
-7. Don't commit. List the files you changed.
+5. **Version** (projects whose `CLAUDE.md` has a « Releases » or « Versioning » section): run `tag-release` in the repo, which lists what reached the default branch since the last tag. Classify each item with that section's rules (MAJOR / MINOR / PATCH, and its pre-1.0 rule if any); docs-only or tooling-only merges (`docs`, `chore`, `test`, `ci`) alone call for no tag. Propose under **Decisions for you** the next version and its one-line message, e.g. `tag-release v0.7.0 "Retake several poses at once"`, with the item that decided the increment. Never tag yourself: the main session runs it after the user agrees. Warn when the project's CI builds on a tag push (a workflow `on: push: tags`): the tag would start a build, against the framework rule.
+6. Propose the rewrite of the Claude memory for this project in your report, as a block of ~20 lines max: current state, pending decisions outside the repo, machine-specific pitfalls. You don't write the memory yourself; the main session does after the user agrees.
+7. Run `claude-usage report --project <repo> --since 30`. For each combination seen in 3+ sessions that no script covers yet, propose the script: a command in the project's script, a `.proj-check` step, a `.proj-status` line, or — when marked `[generic]` — a script in `~/repos/github/agents/framework/scripts/`. Put the proposals in the report; don't write the scripts.
+8. Don't commit. List the files you changed.
 
 ## Mode `audit`
 

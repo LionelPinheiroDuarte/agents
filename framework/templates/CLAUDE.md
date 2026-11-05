@@ -91,11 +91,12 @@ Full rules: `~/repos/github/agents/framework/testing.md`.
 
 ## Releases
 
-- SemVer, a tag on `main` for **every** release, created by the release command:
+- SemVer, a tag on `main` for **every** version that reaches it (a merged feature or fix), with `tag-release vX.Y.Z "message"` once the user agrees (the `product-manager` proposes it at the end of a session; `proj-status` shows `untagged:` until then). The release command builds and publishes a tagged version:
   - **MAJOR**: changes the data model or a main flow
   - **MINOR**: an additive feature, existing flows unchanged
   - **PATCH**: a fix, polish, docs
-- The tag is a marker; building and publishing are explicit steps, never a side effect of pushing a tag.
+  - **Before 1.0.0**: <0.x until the first public release, v1.0.0: a MAJOR change is a MINOR, the rest a PATCH / or none>
+- The tag is a marker; building and publishing are explicit steps, never a side effect of pushing a tag. `git tag -n` lists the versions; no doc copies it.
 - Every expensive run (cloud build, submit, deploy, `terraform apply`) goes through `/preflight`; project checks in `docs/preflight.md`.
 - If a release needs a manual workaround, the pipeline gets a roadmap item to fix it.
 

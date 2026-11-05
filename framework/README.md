@@ -21,6 +21,7 @@ The whole delivery chain exists before the first real feature. Each phase has an
 Rules:
 
 - **No long-lived `dev` branch ahead of `main`.** Feature branches merge to `main` when they are done. If an integration branch exists, it is never more than a few days ahead.
+- **Every version is tagged when it reaches `main`, not at release time.** `tag-release` lists what changed since the last tag; the `product-manager` proposes the SemVer increment at the end of each session (rules in the project's `CLAUDE.md`, « Releases »); `proj-status` prints an `untagged:` line until it is done. The tag is a marker: it never starts a build. `git tag -n` is the list of versions; no doc keeps a copy.
 - **If the pipeline is bypassed, fix the pipeline.** A manual workaround becomes a roadmap item, not a paragraph of docs.
 - **The feedback loop on the real target is part of phase 2** (phone, browsers, terminal, deployed server). If Claude can't see the result (no device, no screenshot, no logs), fix that before building features on top. The loop also sets up states and restores them: a data state (back up the store, edit a copy, put it in place, restore it after), a system setting (text size, language). The project's `CLAUDE.md` holds the recipe; a script once it recurs.
 
@@ -89,6 +90,7 @@ Generic scripts, in [`scripts/`](./scripts/), linked into `~/.local/bin`:
 | `proj-status` | One screen to start a session: git state, branches not merged, recent CI runs, the roadmap's *Now* section and the last section of `sessions.md`, so the session starts without reading either file. A project adds its own lines with an executable `.proj-status` (build quota, deploy state…) |
 | `proj-check [--related]` | Types, lint, tests for the detected stack (Node, Go, Python, Terraform, shell), **silent when they pass**: one summary line, or the tail of each failing step. `--related` runs only the tests of changed files (TDD loop). A `.proj-check` file replaces detection |
 | `claude-usage report [--project .]` | Ranks the command combinations Claude keeps running, per project and across projects, from a persistent history (`collect` copies transcripts before Claude Code deletes them after 30 days) |
+| `tag-release [vX.Y.Z "message"]` | No argument: what reached the default branch since the last tag (merges, feat, fix, breaking). With a version: checks (default branch, synced, CI green on HEAD, above the last tag), runs the project's executable `.tag-release` with the version (writes it into the manifest), commits that as `chore(release)`, annotated tag, push. Never builds |
 | `check-tdd-commits.sh` | The TDD rules on a range of commits (see [`testing.md`](./testing.md)) |
 
 Rules:
