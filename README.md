@@ -116,6 +116,7 @@ current session — so they keep the full context of the work in progress. Each 
 | [`feature-brief`](./skills/feature-brief/SKILL.md) | Ideation interview for a feature, ending in a brief ready for visual design: every screen state, errors, motion, UX decisions |
 | [`grill-me`](./skills/grill-me/SKILL.md) | Interviews you relentlessly about a plan until every branch of the design tree is resolved |
 | [`mentor`](./skills/mentor/SKILL.md) | Explains a code change like a senior mentor: what changed, how it works, why this approach, and the real alternatives |
+| [`metrics-plan`](./skills/metrics-plan/SKILL.md) | Goal-Question-Metric workshop for a project: goal, questions, metrics with exact definitions and data sources, ending in `docs/metrics.md` for the `metrics-analyst` agent |
 | [`preflight`](./skills/preflight/SKILL.md) | Go/no-go checklist before an expensive or quota-bound run (cloud build, deploy, terraform apply) |
 | [`tasks`](./skills/tasks/SKILL.md) | Summarises the open tasks of the task file and picks the one to tackle first, with the reason and a first step |
 | [`vi`](./skills/vi/SKILL.md) | Opens the file of the current change in the editor, in a new tmux window, at the changed line |
