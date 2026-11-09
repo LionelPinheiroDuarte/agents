@@ -1,6 +1,6 @@
 # log-edits
 
-A Claude Code hook that records every file Claude writes. It feeds the [`claude-edits`](../../tools/claude-edits/README.md) tmux popup, which lists the files Claude recently touched, shows what it changed in them, and opens them in Vim.
+A Claude Code hook that records every file Claude writes. It feeds the toolbox's [`x claude edits`](https://github.com/LionelPinheiroDuarte/toolbox/tree/main/x/commands/claude) tmux popup, which lists the files Claude recently touched, shows what it changed in them, and opens them in Vim.
 
 ## Shortcuts
 
@@ -71,7 +71,7 @@ Claude Edit/Write ──► PostToolUse hook (log-edits.py)
                           ├─ append to   ~/.local/state/claude/edits.log
                           └─ snapshot to ~/.local/state/claude/snapshots/
 
-prefix + e ──► claude-edits (fzf popup) ── reads both ──► diff preview / vim + ,d
+prefix + e ──► x claude edits (fzf popup) ── reads both ──► diff preview / vim + ,d
 ```
 
 Claude Code passes the hook a JSON payload on stdin after each edit. Its `tool_response.originalFile` holds the full file content **before** that edit (`null` when the edit created the file). The hook stores it:
@@ -112,4 +112,4 @@ Wired in dotfiles' [`.claude/settings.json`](https://github.com/LionelPinheiroDu
 }
 ```
 
-The guard makes the hook a no-op on a machine without this repo. The popup and its Vim side live in [`tools/claude-edits/`](../../tools/claude-edits/). They need `fzf` 0.66 or later — Debian's package is too old, so the dotfiles Ansible playbook installs the official binary (`--tags fzf`); the popup says so and exits on an older one — and use `batcat` for the file preview when present (numbered plain text otherwise). Nothing else: the diff is drawn by the script itself.
+The guard makes the hook a no-op on a machine without this repo. The popup and its Vim side live in the toolbox, [`x/commands/claude/`](https://github.com/LionelPinheiroDuarte/toolbox/tree/main/x/commands/claude). They need `fzf` 0.66 or later — Debian's package is too old, so the dotfiles Ansible playbook installs the official binary (`--tags fzf`); the popup says so and exits on an older one — and use `batcat` for the file preview when present (numbered plain text otherwise). Nothing else: the diff is drawn by the popup itself.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """log-edits — Claude Code PostToolUse(Edit|Write|NotebookEdit) hook.
 
-Records every file Claude writes, so the `claude-edits` tmux popup
-(tools/claude-edits/) can list recently touched files and show what Claude
+Records every file Claude writes, so the `x claude edits` tmux popup
+(toolbox, x/commands/claude/) can list recently touched files and show what Claude
 changed in them.
 
 Log: ${XDG_STATE_HOME:-~/.local/state}/claude/edits.log
