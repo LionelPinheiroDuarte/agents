@@ -116,6 +116,7 @@ current session — so they keep the full context of the work in progress. Each 
 | [`grill-me`](./skills/grill-me/SKILL.md) | Interviews you relentlessly about a plan until every branch of the design tree is resolved |
 | [`mentor`](./skills/mentor/SKILL.md) | Explains a code change like a senior mentor: what changed, how it works, why this approach, and the real alternatives |
 | [`preflight`](./skills/preflight/SKILL.md) | Go/no-go checklist before an expensive or quota-bound run (cloud build, deploy, terraform apply) |
+| [`tasks`](./skills/tasks/SKILL.md) | Summarises the open tasks of the task file and picks the one to tackle first, with the reason and a first step |
 | [`todo`](./skills/todo/SKILL.md) | Manages a Markdown task file — create, check, complete and archive todos |
 | [`vi`](./skills/vi/SKILL.md) | Opens the file of the current change in the editor, in a new tmux window, at the changed line |
 
