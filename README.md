@@ -31,6 +31,7 @@ Running a project: framework, issues, git.
 |-------|--------------|
 | [`git-manager`](./claude/project/git-manager.md) | Commits, branches, merges, history and conflict resolution |
 | [`issue-manager`](./claude/project/issue-manager.md) | Turns reviews or feature requests into GitHub issues, then implements them (branch, commit, PR) |
+| [`metrics-analyst`](./claude/project/metrics-analyst.md) | Reads a project's delivery metrics (the `shipmetrics` Go CLI) and answers the questions of its GQM tree, with sample sizes and data-quality warnings first |
 | [`product-manager`](./claude/project/product-manager.md) | Applies the [project framework](./framework/README.md): phase plan, one goal per session, docs kept in their place |
 
 ### Testing — `claude/testing/`
