@@ -9,7 +9,7 @@ Task file: `~/documents/journal/tasks.md`
 
 Focus given by the user: `$ARGUMENTS` (if empty, no constraint).
 
-This skill never writes to the task file. Creating, checking and archiving tasks belong to `/todo`.
+This skill never writes to the task file: the user edits it directly.
 
 ## 1. Read
 
