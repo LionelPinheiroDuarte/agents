@@ -6,7 +6,7 @@ description: >
   `docs/metrics.md` and `.shipmetrics.json`, checks data quality first, then
   answers each question with the numbers it got and their sample size, and
   suggests at most three changes tied to a question. Never computes a metric
-  itself. Read-only. Example: "metrics-analyst on ~/repos/github/physiqtracker".
+  itself. Read-only. Example: "metrics-analyst on ~/repos/github/bapix".
 model: sonnet
 tools: ["Read", "Glob", "Grep", "Bash"]
 ---
