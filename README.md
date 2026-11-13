@@ -73,6 +73,9 @@ Languages and server code.
 | Agent | What it does |
 |-------|--------------|
 | [`go-expert`](./claude/backend/go-expert.md) | Writes and reviews idiomatic Go: structure, concurrency, errors, tests |
+| [`python-expert`](./claude/backend/python-expert.md) | Writes and reviews typed, idiomatic Python, and sizes the architecture to the need (service layer, repository, fakes over mocks), grounded in *Architecture Patterns with Python* |
+| [`api-designer`](./claude/backend/api-designer.md) | Designs and reviews API contracts whatever the language: style choice, naming, errors, versioning, pagination, idempotency, security; grounded in *Learning API Styles* |
+| [`fastapi-expert`](./claude/backend/fastapi-expert.md) | Builds, tests and reviews FastAPI services (layers, Pydantic v2, dependencies, auth, SQLite, WSGI hosting); grounded in Lubanovic's *FastAPI* |
 
 ### DevOps — `claude/devops/`
 
