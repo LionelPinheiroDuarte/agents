@@ -21,6 +21,7 @@ The whole delivery chain exists before the first real feature. Each phase has an
 Rules:
 
 - **No long-lived `dev` branch ahead of `main`.** Feature branches merge to `main` when they are done. If an integration branch exists, it is never more than a few days ahead.
+- **A branch merges only once its own CI run is green** (`gh run watch` on the branch's last push), not on local checks alone: CI on `main` then checks the merge result, and the tag waits for it (`tag-release` refuses otherwise).
 - **Every version is tagged when it reaches `main`, not at release time.** `tag-release` lists what changed since the last tag; the `product-manager` proposes the SemVer increment at the end of each session (rules in the project's `CLAUDE.md`, « Releases »); `proj-status` prints an `untagged:` line until it is done. The tag is a marker: it never starts a build. `git tag -n` is the list of versions; no doc keeps a copy.
 - **If the pipeline is bypassed, fix the pipeline.** A manual workaround becomes a roadmap item, not a paragraph of docs.
 - **The feedback loop on the real target is part of phase 2** (phone, browsers, terminal, deployed server). If Claude can't see the result (no device, no screenshot, no logs), fix that before building features on top. The loop also sets up states and restores them: a data state (back up the store, edit a copy, put it in place, restore it after), a system setting (text size, language). The project's `CLAUDE.md` holds the recipe; a script once it recurs.
