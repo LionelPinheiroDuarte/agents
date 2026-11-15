@@ -4,7 +4,7 @@
 #        land <branch> "summary" vX.Y.Z "tag message"     merge, then tag-release
 #
 # Steps, each stopping on failure: clean tree, <branch> pushed and in sync with origin, its CI
-# green (ci-wait), the default branch in sync with origin, `git merge --no-ff` as
+# green (ci-wait; skipped, and said, when the branch has no .github/workflows), the default branch in sync with origin, `git merge --no-ff` as
 # "Merge branch '<branch>': summary", push. With a version: wait for the default branch's CI
 # (tag-release refuses while it runs), then tag-release. Last, the local branch is deleted
 # (git branch -d) and the branches merged but still on origin are listed with the command
@@ -52,7 +52,14 @@ git rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null || die "$bran
 git merge-base --is-ancestor "$branch" "origin/$default" && die "$branch is already merged into $default"
 
 # The branch's own CI, on the commit being merged (framework: a branch merges once it is green).
-ci-wait "$branch" || die "CI on $branch is not green: nothing merged"
+# A repo with no workflow has no CI to wait for (ci-wait would time out): said, then skipped.
+has_ci=false
+[ -n "$(git ls-tree "origin/$branch" .github/workflows/)" ] && has_ci=true
+if $has_ci; then
+  ci-wait "$branch" || die "CI on $branch is not green: nothing merged"
+else
+  echo "land: no .github/workflows on $branch: no CI to wait for"
+fi
 
 git switch -q "$default" || die "could not switch to $default"
 if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$default")" ]; then
@@ -70,7 +77,9 @@ git push -q origin "$default" ||
 echo "land: merged $branch into $default ($(git rev-parse --short HEAD)), pushed"
 
 if [ -n "$tag" ]; then
-  ci-wait "$default" || die "CI on $default is not green after the merge: not tagged"
+  if $has_ci; then
+    ci-wait "$default" || die "CI on $default is not green after the merge: not tagged"
+  fi
   tag-release "$tag" "$tag_message" || die "tag-release failed: merged and pushed, not tagged"
 fi
 
