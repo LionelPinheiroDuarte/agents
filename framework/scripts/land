@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Lands a pushed branch on the default branch, and optionally tags the result.
+# Usage: land <branch> "summary"                          merge only
+#        land <branch> "summary" vX.Y.Z "tag message"     merge, then tag-release
+#
+# Steps, each stopping on failure: clean tree, <branch> pushed and in sync with origin, its CI
+# green (ci-wait), the default branch in sync with origin, `git merge --no-ff` as
+# "Merge branch '<branch>': summary", push. With a version: wait for the default branch's CI
+# (tag-release refuses while it runs), then tag-release. Last, the local branch is deleted
+# (git branch -d) and the branches merged but still on origin are listed with the command
+# that deletes them: remote deletions stay a separate, explicit step.
+# Meant to be run by the owner (`! land …` in Claude Code): merging and tagging are theirs.
+set -euo pipefail
+
+die() {
+  echo "land: $*" >&2
+  exit 1
+}
+
+self=$(readlink -f "$0")
+case "${1:-}" in -h | --help)
+  sed -n '2,13p' "$self" | sed 's/^# \{0,1\}//'
+  exit 0
+  ;;
+esac
+
+[ $# -eq 2 ] || [ $# -eq 4 ] || die "usage: land <branch> \"summary\" [vX.Y.Z \"tag message\"] (see --help)"
+branch=$1 summary=$2 tag=${3:-} tag_message=${4:-}
+[ -n "$summary" ] || die "the summary is empty"
+if [ -n "$tag" ]; then
+  [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "version must look like v1.2.3, got $tag"
+  [ -n "$tag_message" ] || die "the tag message is empty"
+  git show-ref -q --verify "refs/tags/$tag" && die "$tag already exists"
+fi
+for cmd in gh ci-wait; do
+  command -v "$cmd" >/dev/null || die "$cmd is required"
+done
+[ -z "$tag" ] || command -v tag-release >/dev/null || die "tag-release is required"
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || die "not a git repository"
+cd "$root"
+default=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)
+[ -n "$default" ] || default=main
+[ "$branch" != "$default" ] || die "$branch is the default branch"
+[ -z "$(git status --porcelain)" ] || die "uncommitted changes"
+
+git rev-parse -q --verify "refs/heads/$branch" >/dev/null || die "no local branch $branch"
+git fetch -q origin || die "git fetch failed"
+git rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null || die "$branch is not on origin (push it first)"
+[ "$(git rev-parse "$branch")" = "$(git rev-parse "origin/$branch")" ] ||
+  die "$branch differs from origin/$branch (push or pull first)"
+git merge-base --is-ancestor "$branch" "origin/$default" && die "$branch is already merged into $default"
+
+# The branch's own CI, on the commit being merged (framework: a branch merges once it is green).
+ci-wait "$branch" || die "CI on $branch is not green: nothing merged"
+
+git switch -q "$default" || die "could not switch to $default"
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$default")" ]; then
+  git merge-base --is-ancestor HEAD "origin/$default" ||
+    die "$default has commits not on origin/$default: push or reset them first"
+  git merge -q --ff-only "origin/$default"
+fi
+
+if ! git merge -q --no-ff -m "Merge branch '$branch': $summary" "$branch"; then
+  git merge --abort 2>/dev/null || true
+  die "merge of $branch into $default failed (conflict?): aborted, $default unchanged"
+fi
+git push -q origin "$default" ||
+  die "push of $default failed; the merge exists locally: git push origin $default"
+echo "land: merged $branch into $default ($(git rev-parse --short HEAD)), pushed"
+
+if [ -n "$tag" ]; then
+  ci-wait "$default" || die "CI on $default is not green after the merge: not tagged"
+  tag-release "$tag" "$tag_message" || die "tag-release failed: merged and pushed, not tagged"
+fi
+
+git branch -q -d "$branch" || echo "land: warning: could not delete the local branch $branch" >&2
+
+merged=$(git branch -r --merged "origin/$default" --format='%(refname:short)' |
+  grep -v -e "^origin/$default\$" -e '^origin/HEAD$' -e '^origin$' | sed 's|^origin/||' || true)
+if [ -n "$merged" ]; then
+  merged=$(paste -sd ' ' <<<"$merged")
+  echo "land: merged but still on origin: $merged"
+  echo "      git push origin --delete $merged"
+fi
