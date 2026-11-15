@@ -42,7 +42,7 @@ cd "$root"
 default=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)
 [ -n "$default" ] || default=main
 [ "$branch" != "$default" ] || die "$branch is the default branch"
-[ -z "$(git status --porcelain)" ] || die "uncommitted changes"
+[ -z "$(git status --porcelain --untracked-files=no)" ] || die "uncommitted changes"  # untracked files: git refuses a merge that would overwrite one
 
 git rev-parse -q --verify "refs/heads/$branch" >/dev/null || die "no local branch $branch"
 git fetch -q origin || die "git fetch failed"
