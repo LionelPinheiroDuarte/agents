@@ -8,6 +8,10 @@
 # file at the repo root replaces detection, one step per line:
 #   name: command
 # with `{related}` in a command replaced by the changed files in --related mode.
+#
+# A mypy step that fails with `Module "x" has no attribute "y"` is run once more with
+# --no-incremental: mypy's incremental cache reports that error falsely after some edits.
+# The step passes only if the fresh run passes, and the summary says it was retried.
 
 set -uo pipefail
 
@@ -107,9 +111,15 @@ for i in "${!names[@]}"; do
     continue
   fi
   start=$SECONDS
-  if bash -c "$(fill "${cmds[$i]}")" >"$tmp" 2>&1; then
+  cmd=$(fill "${cmds[$i]}")
+  if bash -c "$cmd" >"$tmp" 2>&1; then
     ok=$((ok + 1))
     timings+=("$name $((SECONDS - start))s")
+  elif [[ $cmd =~ (^|[[:space:]/])mypy([[:space:]]|$) && $cmd != *--no-incremental* ]] \
+    && grep -qE 'error: Module "[^"]+" has no attribute' "$tmp" \
+    && bash -c "$(sed -E 's/(^|[[:space:]/])mypy([[:space:]]|$)/\1mypy --no-incremental\2/' <<<"$cmd")" >"$tmp" 2>&1; then
+    ok=$((ok + 1))
+    timings+=("$name $((SECONDS - start))s (retried without mypy's cache)")
   else
     failed+=("$name")
     timings+=("$name FAILED")
