@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Waits for the CI runs of a branch's pushed tip and prints one line.
+# Usage: ci-wait [--timeout SECONDS] [branch]   (default: the current branch, 900 s)
+#
+# Waits for every workflow run on the commit origin/<branch> points to, not for the branch's
+# latest run: right after a push, that one is often the previous commit's. Always bounded, so a
+# forgotten wait cannot outlive its session.
+# Exit: 0 all runs green (success, skipped, neutral) · 1 a run failed or was cancelled ·
+#       2 timeout, or no run appeared for the commit
+set -euo pipefail
+
+die() {
+  echo "ci-wait: $*" >&2
+  exit 2
+}
+
+self=$(readlink -f "$0")
+timeout=900
+interval=${CI_WAIT_INTERVAL:-10}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+  -h | --help)
+    sed -n '2,10p' "$self" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+  --timeout)
+    [[ ${2:-} =~ ^[0-9]+$ ]] || die "--timeout needs a number of seconds"
+    timeout=$2
+    shift 2
+    ;;
+  -*) die "unknown option $1 (see --help)" ;;
+  *)
+    [ -z "${branch:-}" ] || die "one branch at most (see --help)"
+    branch=$1
+    shift
+    ;;
+  esac
+done
+
+command -v gh >/dev/null || die "the GitHub CLI (gh) is required"
+git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
+branch=${branch:-$(git branch --show-current)}
+[ -n "$branch" ] || die "detached HEAD: name the branch"
+
+git fetch -q origin "$branch" 2>/dev/null || die "origin has no branch $branch (not pushed?)"
+sha=$(git rev-parse "origin/$branch")
+short=${sha:0:7}
+if local_sha=$(git rev-parse -q --verify "refs/heads/$branch") && [ "$local_sha" != "$sha" ]; then
+  echo "ci-wait: warning: local $branch differs from origin/$branch: waiting for origin's $short" >&2
+fi
+
+deadline=$((SECONDS + timeout))
+while :; do
+  runs=$(gh run list --commit "$sha" --json status,conclusion,workflowName,url \
+    --jq '.[] | [.status, (.conclusion // ""), .workflowName, .url] | @tsv') ||
+    die "could not read CI runs (gh)"
+
+  if [ -n "$runs" ] && ! awk -F'\t' '$1 != "completed" { found = 1 } END { exit !found }' <<<"$runs"; then
+    failed=$(awk -F'\t' '$2 != "success" && $2 != "skipped" && $2 != "neutral"' <<<"$runs")
+    if [ -z "$failed" ]; then
+      count=$(wc -l <<<"$runs")
+      echo "ci-wait: success $branch $short ($count run$([ "$count" -eq 1 ] || echo s))"
+      exit 0
+    fi
+    while IFS=$'\t' read -r _ conclusion workflow url; do
+      echo "ci-wait: $conclusion $branch $short $workflow $url" >&2
+    done <<<"$failed"
+    exit 1
+  fi
+
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    [ -n "$runs" ] || die "no CI run for $branch $short after ${timeout}s"
+    pending=$(awk -F'\t' '$1 != "completed" { print $3 " " $4 }' <<<"$runs" | head -1)
+    die "timeout after ${timeout}s on $branch $short, still running: $pending"
+  fi
+  sleep "$interval"
+done
