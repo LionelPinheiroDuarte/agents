@@ -57,6 +57,26 @@ The full loop costs a dozen agent runs and several user decisions. For a change 
 
 Dropped: `ux-reviewer` (unless the note changes a flow), the design pass, the full acceptance pass. If the interview finds a new screen or state, stop and switch to the full loop: the note becomes the start of a brief.
 
+### Order of the features: delivery and test cost
+
+The order of *Next* is not only a matter of value. Every feature has a **delivery cost** (from « merged » to « someone runs it ») and a **verification cost** (the passes that prove it works). Ordering features so they share those costs saves whole builds and whole test passes.
+
+Each *Next* item carries two tags:
+
+- **Delivery** — `[ota]`: JS and assets only, ships as an over-the-air update in minutes on the installed binary. `[native]`: anything that changes the native fingerprint (native dependency, permission, config plugin, SDK bump, a file the fingerprint hashes): build, submit, store processing. Projects without a binary use their own classes (`[deploy]`, `[site]`, `[docs]`).
+- **Verification** — `unit` (CI only), `e2e` (the end-to-end flows on the emulator or device), `manual` (the user's hand or eye on the real device).
+
+Rules:
+
+- **A native merge closes the OTA window.** Once `main` holds a native change, its fingerprint no longer matches the installed build and no OTA can ship from it until the next build. So the `[ota]` items go **before** a native batch opens or **after** its build, never in between.
+- **Native items travel together.** The roadmap's *Native batch* lists the `[native]` items planned for the next build; they are done in consecutive sessions, landed together, and built **once**. Open the batch when it holds an item users wait for, or when an `[ota]` item depends on one of its items (`after: <item>`); otherwise keep shipping OTAs.
+- **Split a native feature.** The native part (dependency, plugin, permission, the empty module wired in) goes into the batch; the screens on top ship as `[ota]` after the build and iterate without rebuilding.
+- **Never wait idle on a run.** A build or a long e2e run is started at the start of a block of work (or at the close, for store processing that takes hours); meanwhile the session works on an `[ota]` item, a brief or a review.
+- **Group the verification passes.** Items that need the emulator or the device go back to back, so one e2e or manual pass covers them (the e2e command runs every flow anyway). `unit` items fill the sessions where the device is busy or unavailable.
+- **Check the tag, don't assume it.** Before an item is tagged `[ota]`, the files it touches are checked against the fingerprint (config, ignore files, packages with native code); the project's update command or `eas fingerprint:compare` settles it.
+
+Costs are measured, not guessed: `docs/preflight.md` keeps a « Costs » section (median CI run, build queue + build, store processing, e2e run, manual pass), each with its date and the command that measured it. The `product-manager` refreshes it when it is older than a month.
+
 A design system shared by all features (`docs/design-system.md` or tokens) is set up once, before the first feature: briefs reuse its patterns instead of inventing new ones.
 
 ## 2. Sessions
