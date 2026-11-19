@@ -57,6 +57,27 @@ The full loop costs a dozen agent runs and several user decisions. For a change 
 
 Dropped: `ux-reviewer` (unless the note changes a flow), the design pass, the full acceptance pass. If the interview finds a new screen or state, stop and switch to the full loop: the note becomes the start of a brief.
 
+### Order of the features: delivery and test cost
+
+The order of *Next* is not only a matter of value. Every feature has a **delivery cost** (from « merged » to « someone runs it ») and a **verification cost** (the passes that prove it works). Ordering features so they share those costs saves whole builds and whole test passes.
+
+Each *Next* item carries two tags:
+
+- **Delivery** — `[ota]`: JS and assets only, ships as an over-the-air update in minutes on the installed binary. `[native]`: anything that changes the native fingerprint (native dependency, permission, config plugin, SDK bump, a file the fingerprint hashes): build, submit, store processing. Projects without a binary use their own classes (`[deploy]`, `[site]`, `[docs]`).
+- **Verification** — `unit` (CI only), `e2e` (the end-to-end flows on the emulator or device), `manual` (the user's hand or eye on the real device).
+
+Rules:
+
+- **A native merge closes the OTA window.** Once `main` holds a native change, its fingerprint no longer matches the installed build and no OTA can ship from it until the next build. So the `[ota]` items go **before** a native batch opens or **after** its build, never in between.
+- **Native items travel together.** The roadmap's *Native batch* lists the `[native]` items planned for the next build; they are done in consecutive sessions, landed together, and built **once**. Open the batch when it holds an item users wait for, or when an `[ota]` item depends on one of its items (`after: <item>`); otherwise keep shipping OTAs.
+- **Split a native feature.** The native part (dependency, plugin, permission, the empty module wired in) goes into the batch; the screens on top ship as `[ota]` after the build and iterate without rebuilding.
+- **Never wait idle on a run.** A build or a long e2e run is started at the start of a block of work (or at the close, for store processing that takes hours); meanwhile the session works on an `[ota]` item, a brief or a review.
+- **Group the verification passes.** Items that need the emulator or the device go back to back, so one e2e or manual pass covers them (the e2e command runs every flow anyway). `unit` items fill the sessions where the device is busy or unavailable.
+- **CI is a cost too: time and quota.** Every push to a branch starts a run, and `land` adds one on `main` (and waits for both); a private repo also draws on the account's monthly minutes, **shared by all private repos** (scheduled workflows included). So: push a slice when `proj-check` passes, not every commit; roadmap and session notes ride on the work branch, never on a `chore/` branch of their own; small items of the same area share one branch and one landing. When the quota is near (`ci-minutes` exits 1), CI-free work comes first (briefs, reviews, local-only checks) and the landings wait for the reset; a scheduled workflow that burns most of the quota is a roadmap item. Two leaks seen on BaPix (November 2026, ~250 min): `tag-release`'s `chore(release)` commit re-ran the whole CI for one version line, and a separate « already checked? » job cost a billed minute per run (each job is rounded up). A project with a `.tag-release` lets its CI skip a version-only commit on a green parent, and checks for a skip in a step of the main job, not in a job of its own.
+- **Check the tag, don't assume it.** Before an item is tagged `[ota]`, the files it touches are checked against the fingerprint (config, ignore files, packages with native code); the project's update command or `eas fingerprint:compare` settles it.
+
+Costs are measured, not guessed: `docs/preflight.md` keeps a « Costs » section (median CI run per workflow and runs per landing, the account's CI minutes this month from `ci-minutes`, build queue + build, store processing, e2e run, manual pass), each with its date and the command that measured it. The `product-manager` refreshes it when it is older than a month.
+
 A design system shared by all features (`docs/design-system.md` or tokens) is set up once, before the first feature: briefs reuse its patterns instead of inventing new ones.
 
 ## 2. Sessions
@@ -95,6 +116,7 @@ Generic scripts, in [`scripts/`](./scripts/), linked into `~/.local/bin`:
 | `tag-release [vX.Y.Z "message"]` | No argument: what reached the default branch since the last tag (merges, feat, fix, breaking). With a version: checks (default branch, synced, CI green on HEAD, above the last tag), runs the project's executable `.tag-release` with the version (writes it into the manifest), commits that as `chore(release)`, annotated tag, push. Never builds |
 | `ci-wait [--timeout S] [branch]` | Waits for every CI run on the commit `origin/<branch>` points to (not the branch's latest run, often the previous commit's right after a push), then one line: success (exit 0), each failed run with its link (1), or timeout / no run (2). Bounded, 900 s by default, so a forgotten wait cannot outlive its session. Run it in the background and act on its line |
 | `land <branch> "summary" [vX.Y.Z "message"]` | Lands a pushed branch: clean tree, branch in sync with origin, its CI green (`ci-wait`), `--no-ff` merge as `Merge branch '<branch>': summary`, push. With a version, waits for the default branch's CI, then `tag-release`. Deletes the local branch and prints the merged branches still on origin with the command that deletes them. Stops at the first failure, saying what was and was not done. Run by the owner (`! land …`): merging and tagging stay theirs |
+| `ci-minutes [--quota N]` | GitHub Actions minutes used this month by the account's private repos (each job rounded up to the minute, as billed), one line per repo with its workflows, then the total against the quota (2000 by default, Free plan). Exit 1 at 80% |
 | `check-tdd-commits.sh` | The TDD rules on a range of commits (see [`testing.md`](./testing.md)) |
 
 Rules:

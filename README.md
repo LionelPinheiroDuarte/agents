@@ -31,7 +31,7 @@ Running a project: framework, issues, git.
 | [`git-manager`](./claude/project/git-manager.md) | Commits, branches, merges, history and conflict resolution |
 | [`issue-manager`](./claude/project/issue-manager.md) | Turns reviews or feature requests into GitHub issues, then implements them (branch, commit, PR) |
 | [`metrics-analyst`](./claude/project/metrics-analyst.md) | Reads a project's delivery metrics (the `shipmetrics` Go CLI) and answers the questions of its GQM tree, with sample sizes and data-quality warnings first |
-| [`product-manager`](./claude/project/product-manager.md) | Applies the [project framework](./framework/README.md): phase plan, one goal per session, docs kept in their place |
+| [`product-manager`](./claude/project/product-manager.md) | Applies the [project framework](./framework/README.md): phase plan, features ordered by delivery and test cost (OTA vs native builds), one goal per session, docs kept in their place |
 
 ### Testing — `claude/testing/`
 
@@ -125,7 +125,7 @@ current session — so they keep the full context of the work in progress. Each 
 
 ## Project framework
 
-[`framework/`](./framework/README.md) is how I run a project with Claude Code: build order (walking skeleton first), session scope, and one source of truth per kind of documentation. The [`product-manager`](./claude/project/product-manager.md) agent applies it, the [`ux-reviewer`](./claude/frontend/ux-reviewer.md) agent reviews feature briefs, [`test-writer`](./claude/testing/test-writer.md) and [`test-auditor`](./claude/testing/test-auditor.md) apply the [testing rules](./framework/testing.md); [`templates/`](./framework/templates/) holds the phase-0 files and the feature brief; [`scripts/`](./framework/scripts/) holds `proj-status`, `proj-check` (quiet checks for any stack), `tag-release` (a version tag on every merge to `main`, never a build) and `claude-usage` (tracks the commands Claude repeats across projects, to turn them into scripts).
+[`framework/`](./framework/README.md) is how I run a project with Claude Code: build order (walking skeleton first), session scope, and one source of truth per kind of documentation. The [`product-manager`](./claude/project/product-manager.md) agent applies it, the [`ux-reviewer`](./claude/frontend/ux-reviewer.md) agent reviews feature briefs, [`test-writer`](./claude/testing/test-writer.md) and [`test-auditor`](./claude/testing/test-auditor.md) apply the [testing rules](./framework/testing.md); [`templates/`](./framework/templates/) holds the phase-0 files and the feature brief; [`scripts/`](./framework/scripts/) holds `proj-status`, `proj-check` (quiet checks for any stack), `tag-release` (a version tag on every merge to `main`, never a build), `ci-minutes` (GitHub Actions minutes used by the private repos against the monthly quota) and `claude-usage` (tracks the commands Claude repeats across projects, to turn them into scripts).
 
 ## Claude Code Hooks
 

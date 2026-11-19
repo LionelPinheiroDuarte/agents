@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""GitHub Actions minutes used this month by the owner's private repos, against the quota.
+
+Usage: ci-minutes [--owner NAME] [--quota MINUTES] [--since YYYY-MM-DD]
+  --owner  default: the gh user         --quota  default: $CI_MINUTES_QUOTA or 2000 (Free plan)
+  --since  default: the 1st of this month (the quota resets then)
+
+Estimate, not the invoice: each job's run time rounded up to the minute, the way GitHub bills
+Linux runners; public repos are free and skipped. The billing API needs a `user` token scope
+(gh auth refresh -s user) and gives the exact figure.
+One line per repo that used minutes, then the total. Exit 1 when the total is at 80% or more.
+"""
+import argparse, datetime as dt, json, math, os, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
+
+
+def gh(*args):
+    out = subprocess.run(["gh", *args], capture_output=True, text=True)
+    if out.returncode:
+        sys.exit(f"ci-minutes: gh {' '.join(args)}: {out.stderr.strip()}")
+    return out.stdout
+
+
+def ts(s):
+    return dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+def main():
+    today = dt.date.today()
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("-h", "--help", action="store_true")
+    p.add_argument("--owner")
+    p.add_argument("--quota", type=int, default=int(os.environ.get("CI_MINUTES_QUOTA", 2000)))
+    p.add_argument("--since", default=today.replace(day=1).isoformat())
+    a = p.parse_args()
+    if a.help:
+        print(__doc__.strip())
+        return 0
+    owner = a.owner or gh("api", "user", "-q", ".login").strip()
+    repos = json.loads(gh("repo", "list", owner, "--visibility", "private", "--limit", "200",
+                          "--json", "name"))
+    usage = {}
+    for r in (x["name"] for x in repos):
+        runs = json.loads(gh("api", "--paginate", f"repos/{owner}/{r}/actions/runs?created=>={a.since}&per_page=100",
+                             "-q", "[.workflow_runs[] | {id, name}]") .replace("]\n[", ","))
+        def job_minutes(run):
+            jobs = json.loads(gh("api", f"repos/{owner}/{r}/actions/runs/{run['id']}/jobs?per_page=100",
+                                 "-q", ".jobs"))
+            return run["name"], sum(
+                math.ceil((ts(j["completed_at"]) - ts(j["started_at"])).total_seconds() / 60)
+                for j in jobs
+                if j.get("started_at") and j.get("completed_at") and j["completed_at"] > j["started_at"])
+
+        minutes = {}
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            for name, n in pool.map(job_minutes, runs):
+                if n:
+                    minutes[name] = minutes.get(name, 0) + n
+        if minutes:
+            usage[r] = minutes
+    total = sum(sum(m.values()) for m in usage.values())
+    for r, m in sorted(usage.items(), key=lambda kv: -sum(kv[1].values())):
+        detail = ", ".join(f"{w} {n}" for w, n in sorted(m.items(), key=lambda kv: -kv[1]))
+        print(f"{r}: {sum(m.values())} min ({detail})")
+    pct = 100 * total / a.quota if a.quota else 0
+    print(f"total since {a.since}: {total} / {a.quota} min ({pct:.0f}%)")
+    return 1 if pct >= 80 else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
