@@ -25,8 +25,9 @@ Every mode that touches *Next* applies the framework README's « Order of the fe
 
 1. **Tag** each item: delivery (`[ota]`, `[native]`, or the project's classes) and verification (`unit`, `e2e`, `manual`). Tag `[native]` from what the item touches (native package, permission, config plugin, `app.config.*`, SDK bump, a file the fingerprint hashes such as `.gitignore`), not from its size. Unsure → `[native]`, and say why.
 2. **Order** by value first, then: `[ota]` items before the next native batch opens; `[native]` items grouped in *Native batch*, back to back; a native feature split into its native part (batch) and its screens (`[ota]`, after the build); items needing the emulator or device next to each other; `unit` items as fillers.
-3. **Price** with the « Costs » section of `docs/preflight.md`. Missing, or older than 30 days → measure: `gh run list --limit 20 --json workflowName,createdAt,updatedAt,conclusion` (median per workflow, successful runs only), and for Expo `eas build:list --limit 10 --json --non-interactive` (`createdAt` → `completedAt`, per profile). Write the numbers with the date and the command; never invent one — an unmeasured cost stays `<unmeasured>`.
-4. **Fill the waits**: for each run longer than ~10 minutes in the plan, name the item or the brief the session works on meanwhile.
+3. **Price** with the « Costs » section of `docs/preflight.md`. Missing, or older than 30 days → measure: `gh run list --limit 20 --json workflowName,createdAt,updatedAt,conclusion` (median per workflow, successful runs only), and for Expo `eas build:list --limit 10 --json --non-interactive` (`createdAt` → `completedAt`, per profile). For CI, also the account's minutes this month: `ci-minutes` (all private repos share the quota; say which repo and workflow use most). Write the numbers with the date and the command; never invent one — an unmeasured cost stays `<unmeasured>`.
+4. **Count the CI runs** of the plan: one per push on a branch, one on `main` per landing. Fewer branches for small items of the same area; roadmap and session notes on the work branch. If `ci-minutes` exits 1 (80% of the quota) or CI is off, order CI-free work first (briefs, reviews, local checks) and put the landings after the reset date.
+5. **Fill the waits**: for each run longer than ~10 minutes in the plan, name the item or the brief the session works on meanwhile.
 
 Say in the report when value and cost disagree (a high-value native item alone, an OTA item stuck behind a batch): that order is a decision for the user.
 
@@ -55,7 +56,8 @@ Read-only.
    - where *Now* is in the feature loop: if it is a feature with no brief in `docs/features/`, the goal is the brief (`/feature-brief`), not the code; if the brief is not reviewed, the goal is the review
    - **which loop**: full, or light for a change inside an existing feature (the four questions of the framework README, « The light loop »); say which question decided it
    - **the delivery window**: OTA open (`main` matches the last build) or closed (a native change is on `main`, or a batch is in progress) — from `proj-status`, the project's update command in dry run, or `eas fingerprint:compare`. Closed → the goal continues the native batch or builds it, never an `[ota]` item
-   - **the waits**: the long runs today's goal will start (build, e2e) with their measured cost, and what fills each one
+   - **the CI budget**: `ci-minutes` total against the quota, and the runs today's plan will start; at 80% or with CI off, the goal is CI-free work and the landings wait for the reset
+   - **the waits**: the long runs today's goal will start (build, e2e, CI before a landing) with their measured cost, and what fills each one
    - what is explicitly **out of scope** today (one line per tempting side topic)
    - drift alerts: an `untagged:` line from `proj-status` (a version to tag first), branches ahead of `main` for more than a few days, a `CLAUDE.md` over 200 lines, *Waiting on* items older than two weeks
 
@@ -80,6 +82,7 @@ Read-only. Read `CLAUDE.md`, every `docs/*.md`, and the Claude memory file for t
 - **Misplaced**: TODOs or history in `CLAUDE.md`, state that git already knows (what is merged where), plans in `sessions.md`
 - **Stale**: statements contradicted by the code or git (versions, branch states, "not done yet" items that are done)
 - **Size**: line count of `CLAUDE.md` and of the memory, versus the targets
+- **CI spend**: `ci-minutes`, the workflows that use most (a schedule more frequent than its need), branches that exist only for docs
 - **Order**: *Next* items without delivery or verification tags, a `[native]` item between `[ota]` items, an `[ota]` item that touches fingerprinted files, a « Costs » section missing or older than 30 days
 - **Repeated commands**: `claude-usage report --project <repo>` — combinations seen in 3+ sessions with no script, and the token cost of the biggest ones
 
